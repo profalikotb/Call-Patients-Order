@@ -1,3 +1,4 @@
+import { clean } from '../envClean';
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { getSession, canAccessClinic, type Session } from './auth';
@@ -17,9 +18,9 @@ export async function requireStaff(opts: { clinic?: string | null; admin?: boole
 
 /** Waiting-room screens authenticate with a display key in the URL (?k=…). */
 export function checkDisplayKey(k: string | null) {
-  const want = process.env.DISPLAY_KEY || '';
+  const want = clean(process.env.DISPLAY_KEY);
   if (!want) throw new HttpError(500, 'DISPLAY_KEY not configured');
-  const a = Buffer.from(k || ''), b = Buffer.from(want);
+  const a = Buffer.from(clean(k)), b = Buffer.from(want);
   if (a.length !== b.length || !timingSafeEqual(a, b)) throw new HttpError(403, 'bad_display_key');
 }
 

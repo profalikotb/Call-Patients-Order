@@ -37,6 +37,7 @@ export const GET = handle(async (req) => {
     playback: {
       volume: s.voice.volume, repeatCount: s.voice.repeatCount, repeatDelaySec: s.voice.repeatDelaySec,
       chime: s.voice.chime, includeName: s.voice.includeName, numberStyle: s.voice.numberStyle,
+      rate: s.voice.rate, pitch: s.voice.pitch,
       templates: set, room_label: s.room_label, server_tts: p.azure || p.elevenlabs,
     },
   });

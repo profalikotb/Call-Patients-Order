@@ -23,7 +23,8 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
   const [live, setLive] = useState(false);
   const [stale, setStale] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
-  const [holder, setHolder] = useState<{ ok: boolean; label?: string } | null>(null);
+  const [holder, setHolder] = useState<{ ok: boolean; label?: string; error?: string } | null>(null);
+  const [stateErr, setStateErr] = useState('');
   const [flash, setFlash] = useState(0);
   const [speaking, setSpeaking] = useState(false);
   const [clock, setClock] = useState(new Date());
@@ -79,7 +80,12 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
       voices.find((x) => /^ar/i.test(x.lang) && /(hamed|naayf|male|majed|tarik)/i.test(x.name)) ?? voices.find((x) => /^ar/i.test(x.lang));
     setAudioNote(v ? (/ar-EG/i.test(v.lang) ? `صوت احتياطي: ${v.name}` : `⚠ صوت احتياطي غير مصري: ${v.name}`) : '⚠ لا يوجد صوت عربي في المتصفح');
     const u = new SpeechSynthesisUtterance(text);
-    if (v) u.voice = v; u.lang = v?.lang || 'ar-EG'; u.rate = 0.9; u.volume = Math.min(1, stRef.current?.playback?.volume ?? 1);
+    const pb = stRef.current?.playback ?? {};
+    if (v) u.voice = v; u.lang = v?.lang || 'ar-EG';
+    // same speed / depth as the server voice settings (−40…+30 % → 0.6…1.3, −20…+20 % → 0.6…1.4)
+    u.rate = Math.min(1.3, Math.max(0.6, 1 + (pb.rate ?? -8) / 100));
+    u.pitch = Math.min(1.4, Math.max(0.6, 1 + (pb.pitch ?? -2) / 50));
+    u.volume = Math.min(1, pb.volume ?? 1);
     u.onend = () => res(); u.onerror = () => res();
     ss.speak(u); setTimeout(res, 12000);
   });
@@ -119,7 +125,14 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
   const refresh = useCallback(async () => {
     try {
       const r = await fetch(`/api/display/state?${q({})}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error(String(r.status));
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({} as any));
+        setStateErr(e.error === 'bad_display_key'
+          ? 'مفتاح الشاشة (k) في الرابط غير صحيح – انسخ رابط الشاشة من الإدارة ← الروابط'
+          : `تعذّر تحميل حالة الشاشة (${r.status}): ${e.detail || e.error || ''}`);
+        throw new Error(String(r.status));
+      }
+      setStateErr('');
       const j = await r.json();
       offset.current = j.server_now - Date.now();
       stRef.current = j; setSt(j); setStale(false);
@@ -148,7 +161,14 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     try {
       const r = await fetch('/api/display/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clinic, k, deviceId: dev.current, label, force }) });
-      const j = await r.json();
+      const j = await r.json().catch(() => ({} as any));
+      if (!r.ok) {                                  // server refused (bad link key, server error) ≠ other device
+        const why = j.error === 'bad_display_key'
+          ? 'مفتاح الشاشة (k) في الرابط غير صحيح – انسخ الرابط من الإدارة ← الروابط'
+          : `خطأ في الخادم (${r.status}): ${j.detail || j.error || ''}`;
+        setHolder({ ok: false, error: why }); holderRef.current = false;
+        return false;
+      }
       setHolder({ ok: !!j.ok, label: j.holder }); holderRef.current = !!j.ok;
       return !!j.ok;
     } catch { return false; }
@@ -289,9 +309,20 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
           غير متصل – يتم عرض آخر حالة مؤكدة {st.cachedAt ? `(${new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' }).format(new Date(st.cachedAt))})` : ''}
         </div>)}
 
-      {unlocked && holder && !holder.ok && unlockedRef.current && (
+      {stateErr && (
+        <div className="absolute inset-x-0 top-[5vh] mx-auto w-fit max-w-[90vw] rounded-2xl bg-rose-600 px-6 py-3 text-[1.3vw] font-semibold text-white" dir="auto">
+          ⚠ {stateErr}
+        </div>)}
+
+      {unlocked && holder && !holder.ok && holder.error && (
+        <div className="absolute inset-x-0 bottom-[9vh] mx-auto w-fit max-w-[90vw] rounded-2xl bg-rose-600 px-6 py-3 text-white" dir="auto">
+          ⚠ تعذّر تفعيل الصوت: {holder.error}
+          <button className="ms-3 rounded-lg bg-white px-3 py-1 text-ink-950" onClick={() => activate(true)}>إعادة المحاولة</button>
+        </div>)}
+
+      {unlocked && holder && !holder.ok && !holder.error && unlockedRef.current && (
         <div className="absolute inset-x-0 bottom-[9vh] mx-auto w-fit rounded-2xl bg-amber-500 px-6 py-3 text-ink-950" style={{ cursor: 'auto' }}>
-          الصوت مفعّل على جهاز آخر ({holder.label}) —
+          الصوت مفعّل على جهاز آخر{holder.label ? ` (${holder.label})` : ''} —
           <button className="ms-3 rounded-lg bg-ink-950 px-3 py-1 text-white" onClick={() => activate(true)}>نقل الصوت لهذه الشاشة</button>
         </div>)}
 

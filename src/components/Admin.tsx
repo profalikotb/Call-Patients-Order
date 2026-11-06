@@ -140,6 +140,12 @@ function VoiceTab({ s, setS, setV, save, clinic, tts }: any) {
             <p className="mt-1 text-[11px] text-slate-500">الصوت الذكوري الوحيد بلهجة مصرية في Azure. الأصوات العربية الأخرى ليست مصرية.</p></div>
           <div><label className="label">ElevenLabs Voice ID (اختياري)</label><input className="input" dir="ltr" value={v.elevenVoiceId} onChange={(e) => setV('elevenVoiceId', e.target.value.trim())} placeholder="اختر صوت رجالي مصري من المكتبة" /></div>
         </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-ink-950/5 p-3 text-sm">
+          <span className="font-semibold">إعداد سريع:</span>
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-EG-ShakirNeural', rate: -12, pitch: -10, volume: 1.3, repeatCount: 2, repeatDelaySec: 3, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>🔊 صوت رجالي مصري قوي</button>
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-EG-ShakirNeural', rate: -8, pitch: -2, volume: 1, repeatCount: 2, repeatDelaySec: 4, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>↺ الافتراضي</button>
+          <span className="text-[11px] text-slate-500">ثم «حفظ إعدادات الصوت»</span>
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Slider label="سرعة الكلام" v={v.rate} min={-40} max={30} unit="%" on={(x: number) => setV('rate', x)} />
           <Slider label="طبقة الصوت" v={v.pitch} min={-20} max={20} unit="%" on={(x: number) => setV('pitch', x)} />

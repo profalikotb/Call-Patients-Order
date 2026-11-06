@@ -1,3 +1,4 @@
+import { clean } from '@/lib/envClean';
 import { handle, json, requireStaff, clinicParam, HttpError } from '@/lib/server/http';
 import { db } from '@/lib/server/db';
 import { getClinics, getClinicSettings, getSheetConfig, bust } from '@/lib/server/settings';
@@ -11,7 +12,7 @@ export const GET = handle(async (req) => {
   const clinic = clinicParam(new URL(req.url).searchParams.get('clinic'));
   bust();
   const [clinics, settings, sheet] = await Promise.all([getClinics(), getClinicSettings(clinic), getSheetConfig()]);
-  return json({ ok: true, clinics, settings, sheet, tts: providersAvailable(), sheet_source: sheetSource(), display_key: process.env.DISPLAY_KEY || '' });
+  return json({ ok: true, clinics, settings, sheet, tts: providersAvailable(), sheet_source: sheetSource(), display_key: clean(process.env.DISPLAY_KEY) });
 });
 
 const clamp = (v: any, lo: number, hi: number, d: number) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d);
