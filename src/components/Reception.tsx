@@ -165,6 +165,12 @@ export default function Reception({ clinic }: { clinic: string }) {
         </div>
         {data.day?.paused && <div className="bg-amber-500 py-1 text-center text-xs font-bold text-ink-950">{t('paused')}</div>}
         {data.sheet_source === 'demo' && <div className="bg-amber-100 py-0.5 text-center text-[11px] text-amber-900">{t('demo')}</div>}
+        {!syncOk && (sync?.error || data.day?.last_sync_error) && (
+          <div className="bg-rose-600/90 px-3 py-1.5 text-center text-xs text-white" dir="auto">
+            ⚠ {ar ? 'تعذّر قراءة الشيت: ' : 'Sheet read failed: '}{sync?.error || data.day?.last_sync_error}
+            {ar ? ' — افتح /api/health للتشخيص' : ' — open /api/health'}
+          </div>
+        )}
       </header>
 
       <main className="mx-auto max-w-7xl space-y-4 px-3 pt-4 sm:px-5">

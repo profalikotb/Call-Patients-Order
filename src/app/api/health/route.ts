@@ -70,6 +70,29 @@ export async function GET() {
     report.supabase = `ERROR: ${err?.message || err}`;
   }
 
+  // Google Sheet feed (Apps Script web app) – the same request the queue makes
+  if ((e.SHEET_SOURCE || '') === 'appsscript') {
+    try {
+      const u = new URL(clean(e.APPS_SCRIPT_FEED_URL));
+      if (!/\/exec$/.test(u.pathname)) report.feed_url_warning = 'URL must end with /exec (Deploy → Manage deployments → Web app URL)';
+      u.searchParams.set('token', clean(e.APPS_SCRIPT_FEED_TOKEN));
+      u.searchParams.set('tab', 'QUEUE_TODAY');
+      const r = await fetch(u.toString(), { redirect: 'follow', cache: 'no-store' });
+      const text = await r.text();
+      let j: any = null; try { j = JSON.parse(text); } catch {}
+      if (!r.ok) report.sheet_feed = `REJECTED (HTTP ${r.status}) – web app not deployed for "Anyone", or wrong URL`;
+      else if (!j) report.sheet_feed = 'NOT JSON – Google returned a login/HTML page: set Web app access to "Anyone"';
+      else if (!j.ok) report.sheet_feed = `ERROR from Apps Script: ${j.error}` +
+        (j.error === 'forbidden' ? ' → APPS_SCRIPT_FEED_TOKEN ≠ FEED_TOKEN (run setupFeed() and copy the token)' :
+         j.error === 'unauthorized' ? ' → the deployed web app is the OLD push version: Deploy → Manage deployments → Edit → New version' :
+         j.error === 'tab_not_found' ? ' → tab QUEUE_TODAY missing: Oracle → Refresh now in the sheet' : '');
+      else if (!Array.isArray(j.values)) report.sheet_feed = 'OLD web app version (no "values") → Deploy → Manage deployments → Edit → Version: New version → Deploy';
+      else report.sheet_feed = `ok – ${Math.max(0, j.values.length - 1)} rows; headers: ${(j.values[0] || []).join(' | ')}`;
+    } catch (err: any) {
+      report.sheet_feed = `ERROR: ${err?.message || err}`;
+    }
+  }
+
   report.env = {
     SESSION_SECRET: (e.SESSION_SECRET || '').length >= 32 ? 'ok' : (e.SESSION_SECRET ? 'too short' : false),
     ADMIN_USERNAME: !!e.ADMIN_USERNAME, ADMIN_PASSWORD: !!e.ADMIN_PASSWORD, DISPLAY_KEY: !!e.DISPLAY_KEY,
