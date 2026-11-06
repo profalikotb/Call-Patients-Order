@@ -1,0 +1,62 @@
+import { handle, json, requireStaff, clinicParam } from '@/lib/server/http';
+import { db } from '@/lib/server/db';
+import { getClinic, getClinicSettings } from '@/lib/server/settings';
+import { providersAvailable } from '@/lib/server/tts';
+import { sheetSource } from '@/lib/server/sheets';
+import { cairoDate } from '@/lib/time';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const ORDER: Record<string, number> = { in_room: 0, called: 1, waiting: 2, booked: 3, postponed: 4, absent: 5, done: 6, cancelled: 7 };
+
+export const GET = handle(async (req) => {
+  const clinic = clinicParam(new URL(req.url).searchParams.get('clinic'));
+  await requireStaff({ clinic });
+  const today = cairoDate();
+  const [c, settings, entries, day, display, last] = await Promise.all([
+    getClinic(clinic),
+    getClinicSettings(clinic),
+    db().from('queue_entries').select('*').eq('clinic_id', clinic).eq('service_date', today),
+    db().from('queue_days').select('*').eq('clinic_id', clinic).eq('service_date', today).maybeSingle(),
+    db().from('display_state').select('*').eq('clinic_id', clinic).maybeSingle(),
+    db().from('audit_log').select('id,action,actor,created_at,entry_id').eq('clinic_id', clinic).eq('service_date', today)
+      .eq('undone', false).neq('action', 'undo').order('id', { ascending: false }).limit(1),
+  ]);
+  if (!c) return json({ ok: false, error: 'unknown_clinic' }, 404);
+  if (entries.error) throw entries.error;
+  const rows = entries.data ?? [];
+
+  // estimate = mean of real consultation durations today (in_room → done), recent 12, clamped
+  const durs = rows.filter((r) => r.done_at && r.in_room_at)
+    .sort((a, b) => +new Date(b.done_at) - +new Date(a.done_at)).slice(0, 12)
+    .map((r) => (+new Date(r.done_at) - +new Date(r.in_room_at)) / 60000).filter((m) => m > 0.5 && m < 120);
+  const avg = durs.length >= 3 ? durs.reduce((a, b) => a + b, 0) / durs.length
+    : durs.length ? (durs.reduce((a, b) => a + b, 0) + settings.default_consult_minutes * (3 - durs.length)) / 3
+    : settings.default_consult_minutes;
+  const waiting = rows.filter((r) => r.status === 'waiting' && r.queue_number != null)
+    .sort((a, b) => Number(a.sort_key ?? 1e9) - Number(b.sort_key ?? 1e9) || a.queue_number - b.queue_number);
+  const busy = rows.some((r) => r.status === 'in_room' || r.status === 'called') ? 1 : 0;
+  const pos = new Map(waiting.map((r, i) => [r.id, i]));
+  const list = rows.map((r) => ({ ...r, position: pos.get(r.id) ?? null,
+    est_wait_min: pos.has(r.id) ? Math.round((pos.get(r.id)! + busy) * avg) : null }))
+    .sort((a, b) => (ORDER[a.status] - ORDER[b.status]) ||
+      (a.status === 'waiting' ? (a.position ?? 1e9) - (b.position ?? 1e9) : 0) ||
+      ((a.queue_number ?? 1e9) - (b.queue_number ?? 1e9)) || String(a.appt_time).localeCompare(String(b.appt_time)));
+
+  const count = (s: string) => rows.filter((r) => r.status === s).length;
+  const d = display.data;
+  return json({
+    ok: true, today, clinic: c, policy: settings.policy, room_label: settings.room_label,
+    voice: { includeName: settings.voice.includeName, provider: settings.voice.provider },
+    day: day.data ?? { version: 0, paused: false, current_entry_id: null },
+    entries: list,
+    stats: { waiting: count('waiting'), booked: count('booked'), called: count('called'), in_room: count('in_room'),
+      done: count('done'), absent: count('absent'), postponed: count('postponed'), cancelled: count('cancelled'),
+      total: rows.length, avg_consult_min: Math.round(avg * 10) / 10, avg_samples: durs.length },
+    next_number: waiting[0]?.queue_number ?? null,
+    display: d ? { current_number: d.current_number, next_numbers: d.next_numbers, audio_ready: !!(d.audio_lease_until && new Date(d.audio_lease_until) > new Date()),
+      audio_device_label: d.audio_device_label, announce: d.announce } : null,
+    last_action: last.data?.[0] ?? null,
+    tts: providersAvailable(), sheet_source: sheetSource(), server_now: Date.now(),
+  });
+});
