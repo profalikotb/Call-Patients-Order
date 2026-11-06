@@ -17,7 +17,7 @@ function deviceId() {
   } catch { return `tmp-${Math.random().toString(36).slice(2, 12)}`; }
 }
 
-export default function WaitingDisplay({ clinic, k, label }: { clinic: string; k: string; label: string }) {
+export default function WaitingDisplay({ clinic, k, label, auto = false }: { clinic: string; k: string; label: string; auto?: boolean }) {
   const [st, setSt] = useState<any>(null);
   const [online, setOnline] = useState(true);
   const [live, setLive] = useState(false);
@@ -198,6 +198,30 @@ export default function WaitingDisplay({ clinic, k, label }: { clinic: string; k
     await claim(force);
     refresh();
   }
+  // ?auto=1 → dedicated sound TV: activate WITHOUT a click when the browser allows autoplay
+  // (Edge/Chrome started with --autoplay-policy=no-user-gesture-required, or site Sound = Allow).
+  // Takes the sound over from any other screen. Falls back to the normal button otherwise.
+  useEffect(() => {
+    if (!auto || unlockedRef.current) return;
+    let cancelled = false;
+    const tryAuto = async () => {
+      try {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        if (!ctx.current) { ctx.current = new AC(); gain.current = ctx.current.createGain(); gain.current.connect(ctx.current.destination); }
+        await Promise.race([ctx.current.resume(), new Promise((r) => setTimeout(r, 800))]);
+        if (cancelled || ctx.current.state !== 'running') { setAudioNote('التفعيل التلقائي غير مسموح في هذا المتصفح – اضغط «تفعيل الصوت»'); return; }
+        const b = ctx.current.createBuffer(1, 1, 22050), src = ctx.current.createBufferSource(); src.buffer = b; src.connect(ctx.current.destination); src.start();
+        try { window.speechSynthesis?.getVoices(); } catch {}
+        unlockedRef.current = true; setUnlocked(true); setAudioNote('');
+        await claim(true);
+        refresh();
+      } catch { /* keep the manual button */ }
+    };
+    const t = setTimeout(tryAuto, 600);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
+
   async function silentMode() { unlockedRef.current = false; setUnlocked(true); try { await document.documentElement.requestFullscreen?.(); } catch {} }
 
   // ------------------------------------------------------------- render ----
