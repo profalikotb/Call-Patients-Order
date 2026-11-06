@@ -1,4 +1,5 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT } from 'jose/jwt/sign';
+import { jwtVerify } from 'jose/jwt/verify';
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { db } from './db';

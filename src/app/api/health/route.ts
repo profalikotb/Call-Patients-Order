@@ -21,12 +21,27 @@ export async function GET() {
     DEMO_MODE: e.DEMO_MODE || '0',
     VERCEL_ENV: e.VERCEL_ENV || 'local',
   };
+  // The project URL is public (NEXT_PUBLIC_*) – shown so a wrong / old project is obvious.
+  const rawUrl = e.NEXT_PUBLIC_SUPABASE_URL || '';
+  let urlCheck = 'missing';
+  if (rawUrl) {
+    const problems: string[] = [];
+    if (rawUrl !== rawUrl.trim()) problems.push('has spaces');
+    if (/^["']|["']$/.test(rawUrl.trim())) problems.push('has quotes');
+    if (!/^https:\/\//.test(rawUrl.trim())) problems.push('must start with https://');
+    if (/\/rest\/v1|\/$/.test(rawUrl.trim())) problems.push('remove /rest/v1 or trailing /');
+    if (/supabase\.com\/dashboard/.test(rawUrl)) problems.push('this is the DASHBOARD address, use Project URL https://<ref>.supabase.co');
+    if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(rawUrl.trim())) problems.push('expected format https://<20-letter-ref>.supabase.co');
+    urlCheck = problems.length ? 'WRONG: ' + problems.join('; ') : 'format ok';
+  }
   let supabase: string;
   try {
     const { error } = await db().from('clinics').select('id').limit(1);
     supabase = error ? `ERROR: ${error.message}` : 'ok (tables found)';
   } catch (err: any) {
-    supabase = `ERROR: ${err?.message || err}`;
+    const cause = err?.cause?.code || err?.cause?.message || '';
+    supabase = `ERROR: ${err?.message || err}${cause ? ' [' + cause + ']' : ''}` +
+      (cause === 'ENOTFOUND' ? ' → this project address does not exist (wrong/deleted project)' : '');
   }
-  return json({ ok: true, env, supabase });
+  return json({ ok: true, supabase_url: rawUrl, supabase_url_check: urlCheck, env, supabase });
 }

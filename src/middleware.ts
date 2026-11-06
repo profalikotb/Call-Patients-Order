@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
+import { jwtVerify } from 'jose/jwt/verify';   // sub-path: keeps JWE/deflate out of the Edge bundle
 
 // Page-level gate. APIs enforce auth/roles themselves (requireStaff / display key).
 export async function middleware(req: NextRequest) {
