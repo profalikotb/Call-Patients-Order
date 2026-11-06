@@ -1,47 +1,82 @@
-// Configuration check – shows only WHICH settings are present (never their values).
+// Configuration check – shows WHICH settings are present and whether each Supabase key is accepted.
+// Never prints secret values (only type, length and first characters).
 import { json } from '@/lib/server/http';
 import { db } from '@/lib/server/db';
+import { clean, cleanUrl } from '@/lib/envClean';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function describeKey(raw: string | undefined, urlRef: string) {
+  if (!raw) return { present: false };
+  const k = clean(raw);
+  const info: Record<string, unknown> = {
+    present: true,
+    length: k.length,
+    starts_with: k.slice(0, 15) + '…',
+    had_spaces_or_quotes: k !== raw,
+  };
+  if (k.startsWith('sb_publishable_')) info.type = 'new publishable key';
+  else if (k.startsWith('sb_secret_')) info.type = 'new secret key';
+  else if (k.split('.').length === 3) {
+    try {
+      const p = JSON.parse(Buffer.from(k.split('.')[1], 'base64url').toString('utf8'));
+      info.type = `legacy JWT (role: ${p.role})`;
+      info.project_ref = p.ref;
+      info.matches_url = urlRef ? p.ref === urlRef : 'unknown';
+    } catch { info.type = 'BROKEN JWT (incomplete copy?)'; }
+  } else info.type = 'UNKNOWN format (wrong value?)';
+  return info;
+}
+
+async function probe(url: string, key: string) {
+  if (!url || !key) return 'skipped';
+  try {
+    const r = await fetch(`${url}/rest/v1/clinics?select=id&limit=1`, {
+      headers: { apikey: key, ...(key.startsWith('sb_') ? {} : { Authorization: `Bearer ${key}` }) },
+      cache: 'no-store',
+    });
+    const body = await r.text();
+    if (r.ok) return `ok (HTTP ${r.status})`;
+    let msg = body.slice(0, 160);
+    try { const j = JSON.parse(body); msg = j.message || j.msg || j.error || msg; } catch {}
+    return `REJECTED (HTTP ${r.status}): ${msg}`;
+  } catch (e: any) {
+    return `NETWORK ERROR: ${e?.message}${e?.cause?.code ? ' [' + e.cause.code + ']' : ''}`;
+  }
+}
+
 export async function GET() {
   const e = process.env;
-  const env = {
-    NEXT_PUBLIC_SUPABASE_URL: !!e.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: !!e.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    SUPABASE_SERVICE_ROLE_KEY: !!e.SUPABASE_SERVICE_ROLE_KEY,
-    SESSION_SECRET: (e.SESSION_SECRET || '').length >= 32 ? 'ok' : (e.SESSION_SECRET ? `too short (${e.SESSION_SECRET.length} < 32)` : false),
-    ADMIN_USERNAME: e.ADMIN_USERNAME ? `set (${e.ADMIN_USERNAME.trim().length} chars${e.ADMIN_USERNAME !== e.ADMIN_USERNAME.trim() ? ', HAS SPACES' : ''})` : false,
-    ADMIN_PASSWORD: e.ADMIN_PASSWORD ? `set (${e.ADMIN_PASSWORD.length} chars${e.ADMIN_PASSWORD !== e.ADMIN_PASSWORD.trim() ? ', HAS SPACES' : ''})` : false,
-    DISPLAY_KEY: !!e.DISPLAY_KEY,
-    SHEET_SOURCE: e.SHEET_SOURCE || '(default google)',
-    APPS_SCRIPT_FEED_URL: !!e.APPS_SCRIPT_FEED_URL,
-    APPS_SCRIPT_FEED_TOKEN: !!e.APPS_SCRIPT_FEED_TOKEN,
-    AZURE_SPEECH_KEY: !!e.AZURE_SPEECH_KEY,
-    DEMO_MODE: e.DEMO_MODE || '0',
-    VERCEL_ENV: e.VERCEL_ENV || 'local',
+  const url = cleanUrl(e.NEXT_PUBLIC_SUPABASE_URL);
+  const urlRef = (url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co$/) || [])[1] || '';
+  const service = clean(e.SUPABASE_SERVICE_ROLE_KEY || e.SUPABASE_SECRET_KEY);
+  const anon = clean(e.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+  const report: Record<string, unknown> = {
+    supabase_url: url || '(missing)',
+    supabase_url_ok: urlRef ? 'format ok' : 'WRONG – must be https://<project-ref>.supabase.co',
+    service_role_key: describeKey(e.SUPABASE_SERVICE_ROLE_KEY || e.SUPABASE_SECRET_KEY, urlRef),
+    anon_key: describeKey(e.NEXT_PUBLIC_SUPABASE_ANON_KEY, urlRef),
+    service_key_test: await probe(url, service),
+    anon_key_test: await probe(url, anon),
   };
-  // The project URL is public (NEXT_PUBLIC_*) – shown so a wrong / old project is obvious.
-  const rawUrl = e.NEXT_PUBLIC_SUPABASE_URL || '';
-  let urlCheck = 'missing';
-  if (rawUrl) {
-    const problems: string[] = [];
-    if (rawUrl !== rawUrl.trim()) problems.push('has spaces');
-    if (/^["']|["']$/.test(rawUrl.trim())) problems.push('has quotes');
-    if (!/^https:\/\//.test(rawUrl.trim())) problems.push('must start with https://');
-    if (/\/rest\/v1|\/$/.test(rawUrl.trim())) problems.push('remove /rest/v1 or trailing /');
-    if (/supabase\.com\/dashboard/.test(rawUrl)) problems.push('this is the DASHBOARD address, use Project URL https://<ref>.supabase.co');
-    if (!/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(rawUrl.trim())) problems.push('expected format https://<20-letter-ref>.supabase.co');
-    urlCheck = problems.length ? 'WRONG: ' + problems.join('; ') : 'format ok';
-  }
-  let supabase: string;
+  if (service && service === anon) report.WARNING = 'service role key and anon key are the SAME value – the service key must be the SECRET key';
+  if (service.startsWith('sb_publishable_')) report.WARNING = 'SUPABASE_SERVICE_ROLE_KEY contains the PUBLISHABLE key – use the sb_secret_… key';
+
   try {
     const { error } = await db().from('clinics').select('id').limit(1);
-    supabase = error ? `ERROR: ${error.message}` : 'ok (tables found)';
+    report.supabase = error ? `ERROR: ${error.message}` : 'ok (tables found)';
   } catch (err: any) {
-    const cause = err?.cause?.code || err?.cause?.message || '';
-    supabase = `ERROR: ${err?.message || err}${cause ? ' [' + cause + ']' : ''}` +
-      (cause === 'ENOTFOUND' ? ' → this project address does not exist (wrong/deleted project)' : '');
+    report.supabase = `ERROR: ${err?.message || err}`;
   }
-  return json({ ok: true, supabase_url: rawUrl, supabase_url_check: urlCheck, env, supabase });
+
+  report.env = {
+    SESSION_SECRET: (e.SESSION_SECRET || '').length >= 32 ? 'ok' : (e.SESSION_SECRET ? 'too short' : false),
+    ADMIN_USERNAME: !!e.ADMIN_USERNAME, ADMIN_PASSWORD: !!e.ADMIN_PASSWORD, DISPLAY_KEY: !!e.DISPLAY_KEY,
+    SHEET_SOURCE: e.SHEET_SOURCE || '(default google)',
+    APPS_SCRIPT_FEED_URL: !!e.APPS_SCRIPT_FEED_URL, APPS_SCRIPT_FEED_TOKEN: !!e.APPS_SCRIPT_FEED_TOKEN,
+    AZURE_SPEECH_KEY: !!e.AZURE_SPEECH_KEY, DEMO_MODE: e.DEMO_MODE || '0', VERCEL_ENV: e.VERCEL_ENV || 'local',
+    DEPLOYED_COMMIT: (e.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || 'unknown',
+  };
+  return json(report);
 }

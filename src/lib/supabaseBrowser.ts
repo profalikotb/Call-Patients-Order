@@ -1,10 +1,11 @@
 'use client';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { clean, cleanUrl } from './envClean';
 let c: SupabaseClient | null = null;
 /** anon client – can ONLY read display_state (numbers). Used for Realtime push. */
 export function sb(): SupabaseClient | null {
   if (c) return c;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = cleanUrl(process.env.NEXT_PUBLIC_SUPABASE_URL), key = clean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   if (!url || !key) return null;
   c = createClient(url, key, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 5 } } });
   return c;
