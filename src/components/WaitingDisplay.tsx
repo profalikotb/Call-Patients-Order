@@ -17,6 +17,20 @@ function deviceId() {
   } catch { return `tmp-${Math.random().toString(36).slice(2, 12)}`; }
 }
 
+
+// Browser voices: the ONLY male Egyptian voice is Microsoft Edge's online "Shakir".
+// Windows' own ar-EG voice (Hoda) and Google's Arabic voice are FEMALE → never pick them while a male exists.
+const FEMALE_AR = /(hoda|salma|zariyah|laila|layla|amina|amany|fatima|mouna|iman|sana|noura|rana|reem|sara|mariam|maryam|hala|google)/i;
+const MALE_AR = /(shakir|hamed|naayf|bassel|moaz|rami|taim|hamdan|omar|jamal|fahed|abdullah|ali\b|majed|tarik|male)/i;
+function pickMaleArabicVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
+  const ar = voices.filter((x) => /^ar/i.test(x.lang));
+  return ar.find((x) => /shakir/i.test(x.name))                                   // Edge: Microsoft Shakir Online (Natural) – ar-EG male
+    ?? ar.find((x) => /^ar-EG/i.test(x.lang) && MALE_AR.test(x.name))
+    ?? ar.find((x) => MALE_AR.test(x.name) && !FEMALE_AR.test(x.name))             // other Arabic male (e.g. Hamed, Naayf)
+    ?? ar.find((x) => !FEMALE_AR.test(x.name))
+    ?? ar[0];                                                                        // only female available (warned on screen)
+}
+
 export default function WaitingDisplay({ clinic, k, label, auto = false }: { clinic: string; k: string; label: string; auto?: boolean }) {
   const [st, setSt] = useState<any>(null);
   const [online, setOnline] = useState(true);
@@ -73,12 +87,18 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     src.onended = () => res(); src.start();
   });
 
-  const browserSpeak = (text: string) => new Promise<void>((res) => {
-    const ss = window.speechSynthesis; if (!ss) return res();
-    const voices = ss.getVoices();
-    const v = voices.find((x) => /shakir/i.test(x.name)) ?? voices.find((x) => x.lang === 'ar-EG') ??
-      voices.find((x) => /^ar/i.test(x.lang) && /(hamed|naayf|male|majed|tarik)/i.test(x.name)) ?? voices.find((x) => /^ar/i.test(x.lang));
-    setAudioNote(v ? (/ar-EG/i.test(v.lang) ? `صوت احتياطي: ${v.name}` : `⚠ صوت احتياطي غير مصري: ${v.name}`) : '⚠ لا يوجد صوت عربي في المتصفح');
+  const browserSpeak = async (text: string) => {
+    const ss = window.speechSynthesis; if (!ss) return;
+    // voice list loads asynchronously (Chrome/Edge): wait for it, else the browser's default (often female) is used
+    if (!ss.getVoices().length) await new Promise<void>((r) => { ss.addEventListener('voiceschanged', () => r(), { once: true }); setTimeout(r, 2000); });
+    return speakWith(ss, text);
+  };
+  const speakWith = (ss: SpeechSynthesis, text: string) => new Promise<void>((res) => {
+    const v = pickMaleArabicVoice(ss.getVoices());
+    setAudioNote(!v ? '⚠ لا يوجد صوت عربي في المتصفح – افتح الشاشة في Microsoft Edge'
+      : /shakir/i.test(v.name) ? ''
+      : FEMALE_AR.test(v.name) ? `⚠ صوت نسائي فقط في هذا المتصفح (${v.name}) – افتح الشاشة في Microsoft Edge للصوت الرجالي المصري`
+      : `⚠ صوت رجالي غير مصري (${v.name}) – افتح الشاشة في Microsoft Edge لصوت «شاكر» المصري`);
     const u = new SpeechSynthesisUtterance(text);
     const pb = stRef.current?.playback ?? {};
     if (v) u.voice = v; u.lang = v?.lang || 'ar-EG';
