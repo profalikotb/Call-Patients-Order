@@ -10,9 +10,18 @@ function LoginInner() {
   const [u, setU] = useState(''); const [p, setP] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setErr('');
-    const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
-    setBusy(false);
-    if (res.ok) r.replace(q.get('next') || '/'); else setErr(t('badLogin'));
+    try {
+      const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
+      if (res.ok) { r.replace(q.get('next') || '/'); return; }
+      const j = await res.json().catch(() => ({} as any));
+      // 401 = wrong username/password; anything else = server configuration problem → show the real reason
+      if (res.status === 401) setErr(t('badLogin'));
+      else setErr(`خطأ في إعدادات الخادم (${res.status}): ${j.detail || j.error || 'unknown'} — افتح /api/health`);
+    } catch (e: any) {
+      setErr(`تعذر الاتصال بالخادم: ${e?.message || e}`);
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <main className="min-h-dvh grid place-items-center bg-gradient-to-br from-ink-950 via-ink-900 to-ink-800 p-4">
