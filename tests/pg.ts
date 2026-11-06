@@ -8,7 +8,9 @@ let embedded: any = null;
 export async function startDb(): Promise<pg.Pool> {
   let url = process.env.TEST_DATABASE_URL;
   if (!url) {
-    const { default: EmbeddedPostgres } = await import('embedded-postgres');
+    // optional dev-only package (npm run test:local installs it); kept out of the production install
+    const mod = 'embedded-postgres';
+    const { default: EmbeddedPostgres } = await import(/* @vite-ignore */ mod);
     const dir = mkdtempSync(join(tmpdir(), 'queue-pg-'));
     chmodSync(dir, 0o777);
     const port = 55000 + Math.floor(Math.random() * 2000);
