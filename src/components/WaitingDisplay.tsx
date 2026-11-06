@@ -21,7 +21,7 @@ function deviceId() {
 // Browser voices: the ONLY male Egyptian voice is Microsoft Edge's online "Shakir".
 // Windows' own ar-EG voice (Hoda) and Google's Arabic voice are FEMALE → never pick them while a male exists.
 const FEMALE_AR = /(hoda|salma|zariyah|laila|layla|amina|amany|fatima|mouna|iman|sana|noura|rana|reem|sara|mariam|maryam|hala|google)/i;
-const MALE_AR = /(shakir|hamed|naayf|bassel|moaz|rami|taim|hamdan|omar|jamal|fahed|abdullah|ali\b|majed|tarik|male)/i;
+const MALE_AR = /(shakir|hamed|naayf|bassel|moaz|rami|taim|hamdan|omar|jamal|fahed|abdullah|ali\b|majed|maged|tarik|male)/i;
 function pickMaleArabicVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
   const ar = voices.filter((x) => /^ar/i.test(x.lang));
   return ar.find((x) => /shakir/i.test(x.name))                                   // Edge: Microsoft Shakir Online (Natural) – ar-EG male
