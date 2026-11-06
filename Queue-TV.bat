@@ -6,7 +6,7 @@ REM  1) Paste the display link from  الإدارة -> الروابط  between t
 REM     (keep "&auto=1" at the end - it switches sound on without a click)
 REM  2) Double-click this file. Close with Alt+F4.
 REM ================================================================
-set "URL=PASTE_DISPLAY_LINK_HERE&auto=1"
+   set "URL=https://call-patients-order.vercel.app/display/toukh?k=…&label=…&auto=1"
 
 set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
 if not exist "%EDGE%" set "EDGE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
