@@ -106,12 +106,13 @@ export function mergeSettings(row: any, clinicId: string): ClinicSettings {
 }
 
 // ---- sheet configuration (stored in app_config.sheet) ----
-export const FIELDS = ['booking_id', 'date', 'time', 'clinic', 'name', 'phone', 'action', 'status'] as const;
+export const FIELDS = ['booking_id', 'date', 'time', 'clinic', 'name', 'phone', 'action', 'status', 'call_no'] as const;
 export type Field = (typeof FIELDS)[number];
 
 export const FIELD_LABEL_AR: Record<Field, string> = {
   booking_id: 'معرف الحجز', date: 'التاريخ', time: 'الوقت', clinic: 'العيادة',
   name: 'الاسم', phone: 'رقم واتساب', action: 'الإجراء', status: 'حالة الحجز (اختياري)',
+  call_no: 'رقم النداء الثابت (اختياري)',
 };
 
 export interface SheetConfig {

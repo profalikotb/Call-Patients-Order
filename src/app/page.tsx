@@ -6,7 +6,16 @@ import { useLang } from '@/lib/i18n';
 export default function Home() {
   const { t, toggle, lang } = useLang();
   const [d, setD] = useState<any>(null);
-  useEffect(() => { fetch('/api/clinics').then((r) => r.json()).then(setD); }, []);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    fetch('/api/clinics')
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({} as any));
+        if (!r.ok || !j.ok) setErr(`خطأ في الخادم (${r.status}): ${j.detail || j.error || 'unknown'} — افتح /api/health`);
+        setD(j);
+      })
+      .catch((e) => setErr(`تعذر الاتصال بالخادم: ${e?.message || e}`));
+  }, []);
   async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/login'; }
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-8">
@@ -21,6 +30,8 @@ export default function Home() {
           <button className="btn-ghost text-sm" onClick={logout}>{t('logout')}</button>
         </div>
       </header>
+      {err && <p className="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200" dir="auto">{err}</p>}
+      {d?.ok && !d?.clinics?.length && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">لا توجد عيادات مفعّلة — شغّل ملف supabase/migrations/001_queue.sql في Supabase SQL Editor</p>}
       {d?.demo && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800 ring-1 ring-amber-200">{t('demo')}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
         {d?.clinics?.map((c: any) => (

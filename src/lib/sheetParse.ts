@@ -12,6 +12,8 @@ const SYNONYMS: Record<Field, string[]> = {
   phone: ['رقم واتساب', 'واتساب', 'رقم الواتساب', 'رقم الموبايل', 'الموبايل', 'الهاتف', 'رقم الهاتف', 'التليفون', 'phone', 'whatsapp', 'mobile'],
   action: ['الاجراء', 'نوع الكشف', 'نوع الزياره', 'الخدمه', 'نوع الحجز', 'procedure', 'action', 'type'],
   status: ['الحاله', 'حاله الحجز', 'status', 'state'],
+  // fixed calling number decided upstream (e.g. Oracle → WaitingListToday). When present it IS the queue number.
+  call_no: ['رقم النداء', 'رقم الدور', 'رقم النداء الثابت', 'call no', 'call number', 'queue no', 'queue number'],
 };
 
 export function autoMap(headers: string[], overrides: SheetConfig['mapping'] = {}): Record<Field, number> {
@@ -116,6 +118,7 @@ export interface ParsedRow {
   procedure: string | null;
   cancelled: boolean;
   dup_hint: string | null;
+  call_no: number | null;       // fixed calling number from the sheet (optional)
 }
 
 export interface ParseResult {
@@ -165,6 +168,8 @@ export function parseSheet(values: unknown[][], cfg: SheetConfig, clinics: Clini
     const minutes = parseTimeCell(cell(r, 'time'));
     const rawId = toWesternDigits(String(cell(r, 'booking_id') ?? '')).replace(/\s+/g, '').trim();
     const procedure = String(cell(r, 'action') ?? '').trim() || null;
+    const callRaw = toWesternDigits(String(cell(r, 'call_no') ?? '')).replace(/[^0-9]/g, '');
+    const call_no = callRaw && Number(callRaw) > 0 && Number(callRaw) < 100000 ? Number(callRaw) : null;
     const cancelled = containsAny(procedure ?? '', cfg.cancelKeywords) || containsAny(String(cell(r, 'status') ?? ''), cfg.cancelKeywords);
     const key = rawId
       ? `id:${rawId}`
@@ -173,7 +178,7 @@ export function parseSheet(values: unknown[][], cfg: SheetConfig, clinics: Clini
     const row: ParsedRow = {
       booking_key: key, booking_id: rawId || null, name, phone,
       appt_time: minutes === null ? null : minutesToHHMM(minutes), appt_minutes: minutes,
-      procedure, cancelled, dup_hint: null,
+      procedure, cancelled, dup_hint: null, call_no,
     };
     const prev = byKey.get(key);
     if (prev) {
@@ -202,7 +207,7 @@ export function parseSheet(values: unknown[][], cfg: SheetConfig, clinics: Clini
       if (g.length < 2) continue;
       for (const r of g) r.dup_hint = g.filter((o) => o !== r).map((o) => o.booking_id || o.appt_time || '?').join('، ');
     }
-    rows.sort((a, b) => (a.appt_minutes ?? 9999) - (b.appt_minutes ?? 9999) || a.booking_key.localeCompare(b.booking_key));
+    rows.sort((a, b) => (a.call_no ?? 1e9) - (b.call_no ?? 1e9) || (a.appt_minutes ?? 9999) - (b.appt_minutes ?? 9999) || a.booking_key.localeCompare(b.booking_key));
   }
   return { headers, map, missing, rowsByClinic, stats };
 }
