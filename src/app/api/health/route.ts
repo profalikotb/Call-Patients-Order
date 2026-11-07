@@ -98,7 +98,7 @@ export async function GET() {
     ADMIN_USERNAME: !!e.ADMIN_USERNAME, ADMIN_PASSWORD: !!e.ADMIN_PASSWORD, DISPLAY_KEY: !!e.DISPLAY_KEY,
     SHEET_SOURCE: e.SHEET_SOURCE || '(default google)',
     APPS_SCRIPT_FEED_URL: !!e.APPS_SCRIPT_FEED_URL, APPS_SCRIPT_FEED_TOKEN: !!e.APPS_SCRIPT_FEED_TOKEN,
-    AZURE_SPEECH_KEY: !!e.AZURE_SPEECH_KEY, DEMO_MODE: e.DEMO_MODE || '0', VERCEL_ENV: e.VERCEL_ENV || 'local',
+    AZURE_SPEECH_KEY: !!e.AZURE_SPEECH_KEY, QUEUE_API_TOKEN: clean(e.QUEUE_API_TOKEN).length >= 16 ? 'ok' : (e.QUEUE_API_TOKEN ? 'too short' : false), DEMO_MODE: e.DEMO_MODE || '0', VERCEL_ENV: e.VERCEL_ENV || 'local',
     DEPLOYED_COMMIT: (e.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || 'unknown',
   };
   return json(report);
