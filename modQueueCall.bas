@@ -78,7 +78,9 @@ Private Function FriendlyError(ByVal resp As String) As String
     Select Case JVal(resp, "error")
         Case "bad_token":             FriendlyError = "QUEUE_TOKEN in Access does not match QUEUE_API_TOKEN in Vercel."
         Case "booking_not_in_queue":  FriendlyError = "This patient is not in today's queue yet (QUEUE_TODAY) or belongs to another clinic."
-        Case "empty":                 FriendlyError = "Nobody is waiting."
+        Case "empty":                 FriendlyError = "Nobody is waiting in " & JVal(resp, "clinic") & " on " & JVal(resp, "date") & _
+                                      " (" & JVal(resp, "entries_today") & " patients in today's queue)." & vbCrLf & _
+                                      "Check: today's bookings in QUEUE_TODAY, the clinic (QUEUE_CLINIC), and that they are not already called."
         Case "too_soon":              FriendlyError = "Pressed twice too quickly - the first call is already playing."
         Case "no_target":             FriendlyError = "No patient is currently called."
         Case "invalid_state":         FriendlyError = "This patient cannot be called in his current state (already done / in room)."

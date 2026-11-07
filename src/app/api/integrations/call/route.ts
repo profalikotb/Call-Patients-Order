@@ -55,11 +55,23 @@ export const POST = handle(async (req) => {
     entryId = e.id;
   }
 
-  const res: any = await rpc('queue_apply', {
+  const apply = () => rpc('queue_apply', {
     p_clinic: clinic, p_date: date, p_action: action, p_entry: entryId,
     p_expected_version: null, p_actor: clean(b.actor) || 'MS Access', p_idem: null, p_args: {},
   });
-  if (!res?.ok) return json({ ok: false, clinic, action, error: res?.error ?? 'failed', detail: res?.detail }, 422);
+  let res: any = await apply();
+  // Queue only fills from the sheet while a reception page is open. Called from Access with no page open
+  // (e.g. first call of the day) → pull the sheet once and try again.
+  if (!res?.ok && res?.error === 'empty' && action === 'call_next') {
+    await syncAll(true);
+    res = await apply();
+  }
+  if (!res?.ok) {
+    const { count } = await db().from('queue_entries').select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinic).eq('service_date', date);
+    return json({ ok: false, clinic, date, action, error: res?.error ?? 'failed', detail: res?.detail,
+      entries_today: count ?? 0 }, 422);
+  }
 
   // report what the screen now shows
   const { data: d } = await db().from('display_state').select('current_number').eq('clinic_id', clinic).maybeSingle();
