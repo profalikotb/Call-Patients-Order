@@ -13,6 +13,10 @@ Option Explicit
 '     =QueueInRoom()  /  =QueueDone()     patient entered / finished
 '
 '  QUEUE_CLINIC = "auto" -> Friday = Toukh, other days = Heliopolis
+'
+'  Desktop push (Oracle -> app, no Google Sheet):
+'  pressing "call" on a PC makes THAT PC's Oracle the list source.
+'  The first press after switching PCs can take ~10 s (the PC sends its list).
 ' =====================================================================
 
 Private Const QUEUE_URL    As String = "https://call-patients-order.vercel.app/api/integrations/call"
@@ -51,15 +55,18 @@ Private Function QueueSend(ByVal action As String, ByVal bookingId As String) As
 
     body = "{""clinic"":""" & QUEUE_CLINIC & """,""action"":""" & action & """" & _
            IIf(bookingId <> "", ",""booking_id"":""" & bookingId & """", "") & _
+           ",""host"":""" & JEsc(Environ$("COMPUTERNAME")) & """" & _
            ",""actor"":""" & JEsc(CurrentUserLabel()) & """}"
 
+    DoCmd.Hourglass True
     Set x = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-    x.setTimeouts 5000, 5000, 15000, 15000
+    x.setTimeouts 5000, 5000, 35000, 35000        ' up to ~30 s when the list switches to this PC
     x.Open "POST", QUEUE_URL, False
     x.setRequestHeader "Content-Type", "application/json; charset=utf-8"
     x.setRequestHeader "X-Queue-Token", QUEUE_TOKEN
     x.send body
     resp = x.responseText
+    DoCmd.Hourglass False
 
     If x.Status = 200 And InStr(resp, """ok"":true") > 0 Then
         num = JVal(resp, "number"): nm = JVal(resp, "name")
@@ -71,21 +78,30 @@ Private Function QueueSend(ByVal action As String, ByVal bookingId As String) As
     End If
     Exit Function
 EH:
+    DoCmd.Hourglass False
     MsgBox "No connection to the queue system:" & vbCrLf & Err.Description, vbCritical, "Smart Queue"
 End Function
 
 Private Function FriendlyError(ByVal resp As String) As String
     Select Case JVal(resp, "error")
         Case "bad_token":             FriendlyError = "QUEUE_TOKEN in Access does not match QUEUE_API_TOKEN in Vercel."
-        Case "booking_not_in_queue":  FriendlyError = "This patient is not in today's queue yet (QUEUE_TODAY) or belongs to another clinic."
-        Case "empty":                 FriendlyError = "Nobody is waiting in " & JVal(resp, "clinic") & " on " & JVal(resp, "date") & _
-                                      " (" & JVal(resp, "entries_today") & " patients in today's queue)." & vbCrLf & _
-                                      "Check: today's bookings in QUEUE_TODAY, the clinic (QUEUE_CLINIC), and that they are not already called."
+        Case "booking_not_in_queue":  FriendlyError = "This patient is not in today's " & JVal(resp, "clinic") & " list." & vbCrLf & _
+                                      "List comes from PC: " & JVal(resp, "source_pc") & SourceNote(resp)
+        Case "empty":                 FriendlyError = "Nobody is waiting in " & JVal(resp, "clinic") & " on " & JVal(resp, "date") & "." & vbCrLf & vbCrLf & _
+                                      "Today's list: " & JVal(resp, "by_status") & vbCrLf & _
+                                      "List comes from PC: " & JVal(resp, "source_pc") & SourceNote(resp) & vbCrLf & vbCrLf & _
+                                      "- All called / done: everyone was already called. Use 'call this patient' to re-call one." & vbCrLf & _
+                                      "- Wrong PC: in reception pick this PC under 'List source', or check its QueuePush task."
         Case "too_soon":              FriendlyError = "Pressed twice too quickly - the first call is already playing."
         Case "no_target":             FriendlyError = "No patient is currently called."
         Case "invalid_state":         FriendlyError = "This patient cannot be called in his current state (already done / in room)."
         Case Else:                    FriendlyError = Left$(resp, 300)
     End Select
+End Function
+
+Private Function SourceNote(ByVal resp As String) As String
+    Dim n As String: n = JVal(resp, "push_note")
+    If n <> "" Then SourceNote = vbCrLf & "Problem: " & n
 End Function
 
 Private Function CurrentUserLabel() As String

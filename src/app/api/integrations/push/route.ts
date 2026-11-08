@@ -13,6 +13,7 @@ import { applyValues } from '@/lib/server/sync';
 import { parseSheet } from '@/lib/sheetParse';
 import { cairoDate } from '@/lib/time';
 import { clean } from '@/lib/envClean';
+import { clientIp, notePcAddress } from '@/lib/server/pushSource';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,7 @@ export const POST = handle(async (req) => {
   const lease = await rpc<any>('push_claim', { p_date: today, p_source: source, p_priority: prio,
                                                p_label: S(b.label, 60) || null, p_idle_seconds: 180 })
     .catch((e) => { if (/push_claim/.test(String(e?.message))) return { ok: true }; throw e; });
+  await notePcAddress(source, S(b.host, 40), clientIp(req));
   if (!lease?.ok) return json({ ok: false, error: 'other_source', owner: lease?.owner,
     pinned: !!lease?.pinned,
     detail: `${lease?.owner} is sending today's list${lease?.pinned ? ' (chosen in reception)' : ''} – this PC waits` }, 409);
@@ -84,5 +86,6 @@ export const GET = handle(async (req) => {
   const r = await rpc<any>('push_poll', { p_date: cairoDate(), p_source: src,
     p_priority: Math.max(1, Math.min(9, Number(sp.get('priority')) || 9)), p_label: S(sp.get('label'), 60) || null,
     p_error: S(sp.get('err'), 300) || null });
+  await notePcAddress(src, S(sp.get('host'), 40), clientIp(req));
   return json({ ok: true, want: !!r?.want, owner: r?.owner ?? null });
 });

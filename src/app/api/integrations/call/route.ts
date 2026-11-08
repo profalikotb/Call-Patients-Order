@@ -12,7 +12,10 @@ import { db, rpc } from '@/lib/server/db';
 import { syncAll } from '@/lib/server/sync';
 import { cairoDate } from '@/lib/time';
 import { clean } from '@/lib/envClean';
+import { sheetSource } from '@/lib/server/sheets';
+import { clientIp, pcForCaller, pushOwner, requestPushAndWait } from '@/lib/server/pushSource';
 export const runtime = 'nodejs';
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 const ALLOWED = new Set(['call_next', 'call', 'repeat', 'in_room', 'done', 'skip']);
@@ -44,14 +47,29 @@ export const POST = handle(async (req) => {
   const action = String(b.action || 'call_next');
   if (!ALLOWED.has(action)) throw new HttpError(400, 'bad_action');
   const date = cairoDate();
+  const push = sheetSource() === 'push';
+
+  // Desktop push: the button was pressed on a PC → THAT PC's Oracle list is used (switch + wait for it once)
+  let pushNote: string | undefined;
+  if (push && (action === 'call_next' || action === 'call')) {
+    const host = clean(b.host) || (String(b.actor || '').match(/@([^\s]+)$/)?.[1] ?? '');
+    const me = host ? await pcForCaller(host, clientIp(req)) : null;
+    if (me && (await pushOwner(date)).owner !== me) {
+      const w = await requestPushAndWait(date, me);
+      if (!w.ok) pushNote = w.error;
+    }
+  }
+  // list missing a patient / nobody waiting → ask the sending PC for a fresh list once, then retry
+  const refresh = async () => { if (push) { const w = await requestPushAndWait(date, null); if (!w.ok) pushNote = w.error; } else await syncAll(true); };
 
   let entryId: string | null = null;
   if (action === 'call') {
     const bid = String(b.booking_id ?? '').replace(/[^0-9A-Za-z-]/g, '');
     if (!bid) throw new HttpError(400, 'booking_id_required');
     let e = await findEntry(clinic, date, bid);
-    if (!e) { await syncAll(true); e = await findEntry(clinic, date, bid); }   // just booked → pull the sheet once
-    if (!e) return json({ ok: false, error: 'booking_not_in_queue', detail: `booking ${bid} is not in today's ${clinic} queue (check QUEUE_TODAY / clinic)` }, 404);
+    if (!e) { await refresh(); e = await findEntry(clinic, date, bid); }   // just booked → fresh list once
+    if (!e) return json({ ok: false, error: 'booking_not_in_queue', clinic, date, push_note: pushNote,
+      detail: `booking ${bid} is not in today's ${clinic} list` }, 404);
     entryId = e.id;
   }
 
@@ -63,14 +81,18 @@ export const POST = handle(async (req) => {
   // Queue only fills from the sheet while a reception page is open. Called from Access with no page open
   // (e.g. first call of the day) → pull the sheet once and try again.
   if (!res?.ok && res?.error === 'empty' && action === 'call_next') {
-    await syncAll(true);
+    await refresh();
     res = await apply();
   }
   if (!res?.ok) {
-    const { count } = await db().from('queue_entries').select('id', { count: 'exact', head: true })
+    const { data: rows } = await db().from('queue_entries').select('status')
       .eq('clinic_id', clinic).eq('service_date', date);
+    const by: Record<string, number> = {};
+    (rows ?? []).forEach((r: any) => { by[r.status] = (by[r.status] ?? 0) + 1; });
+    const o = push ? await pushOwner(date) : null;
     return json({ ok: false, clinic, date, action, error: res?.error ?? 'failed', detail: res?.detail,
-      entries_today: count ?? 0 }, 422);
+      entries_today: rows?.length ?? 0, by_status: Object.entries(by).map(([k, v]) => `${k} ${v}`).join(', '),
+      source_pc: o?.owner ?? null, push_note: pushNote }, 422);
   }
 
   // report what the screen now shows
