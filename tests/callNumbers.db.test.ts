@@ -91,3 +91,41 @@ describe('seen in Oracle → done in queue', () => {
     expect((await db.query('select queue_mark_seen($1,$2,$3::text[]) n', [T, D, ['id:A']])).rows[0].n).toBe(0); // idempotent
   });
 });
+
+describe('sheet mirror (004)', () => {
+  const mirror = async () => (await db.query('select queue_mirror_sheet($1,$2) n', [T, D])).rows[0].n;
+  const st = async () => Object.fromEntries((await db.query(
+    'select booking_id, status, queue_number from queue_entries where clinic_id=$1', [T])).rows.map((r) => [r.booking_id, `${r.status}:${r.queue_number}`]));
+  it('bookings deleted in Oracle: numbers follow the sheet even for called patients', async () => {
+    const rows = ['A', 'B', 'C', 'D', 'E'].map((id, i) => row(id, i + 1));
+    await sync(rows); await mirror();
+    await act('call_next'); await act('in_room');            // A in room
+    await act('call_next');                                  // B called
+    // Oracle: A, B, C deleted; D, E renumbered 1, 2 … and B is still there? no – only D, E remain
+    await sync([row('D', 1), row('E', 2)]);
+    await mirror();
+    const s = await st();
+    expect(s.D).toBe('waiting:1');
+    expect(s.E).toBe('waiting:2');
+    expect(s.A.startsWith('done')).toBe(true);
+    expect(s.B.startsWith('done')).toBe(true);
+    expect(s.C.startsWith('cancelled')).toBe(true);
+  });
+  it('a called patient whose number shifts takes the new sheet number', async () => {
+    await sync([row('X', 1), row('Y', 2), row('Z', 3)]); await mirror();
+    await act('call_next'); await act('call_next');          // X, Y called
+    await sync([row('Y', 1), row('Z', 2)]);                  // X deleted in Oracle
+    await mirror();
+    const s = await st();
+    expect(s.Y).toBe('called:1');
+    expect(s.Z).toBe('waiting:2');
+  });
+  it('walk-in moves after the sheet numbers, no duplicates', async () => {
+    await sync([row('P', 1)]); await mirror();
+    await act('add_walkin', null, { name: 'w' });
+    await sync([row('P', 1), row('Q', 2)]); await mirror();
+    const nums = (await db.query('select queue_number from queue_entries where clinic_id=$1 and queue_number is not null', [T])).rows.map((r) => r.queue_number);
+    expect(new Set(nums).size).toBe(nums.length);
+    expect((await st()).Q).toBe('waiting:2');
+  });
+});

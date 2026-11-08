@@ -30,6 +30,9 @@ export async function syncAll(force = false): Promise<SyncReport> {
         try { out[id].seen_done = await rpc('queue_mark_seen', { p_clinic: id, p_date: today, p_keys: seenKeys }); }
         catch (e: any) { out[id].seen_error = String(e?.message || e); }
       }
+      // sheet = source of truth: numbers and list follow Oracle exactly (needs migration 004)
+      try { out[id].mirrored = await rpc('queue_mirror_sheet', { p_clinic: id, p_date: today }); }
+      catch (e: any) { out[id].mirror_error = String(e?.message || e); }
     }
     return { ok: true, clinics: out, stats: parsed.stats, missing: parsed.missing };
   } catch (e: any) {
