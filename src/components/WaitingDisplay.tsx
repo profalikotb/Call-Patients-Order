@@ -20,12 +20,17 @@ function deviceId() {
 
 // Browser voices: the ONLY male Egyptian voice is Microsoft Edge's online "Shakir".
 // Windows' own ar-EG voice (Hoda) and Google's Arabic voice are FEMALE → never pick them while a male exists.
-const FEMALE_AR = /(hoda|salma|zariyah|laila|layla|amina|amany|fatima|mouna|iman|sana|noura|rana|reem|sara|mariam|maryam|hala|google)/i;
-const MALE_AR = /(shakir|hamed|naayf|bassel|moaz|rami|taim|hamdan|omar|jamal|fahed|abdullah|ali\b|majed|maged|tarik|male)/i;
+// Edge in ARABIC shows the voice names in Arabic («Microsoft شاكر Online (Natural) - العربية (مصر)»),
+// so every name is matched in both scripts.
+const FEMALE_AR = /(hoda|salma|zariyah|laila|layla|amina|amany|fatima|mouna|iman|sana|noura|rana|reem|sara|mariam|maryam|hala|google|هدى|هدي|سلمى|سلمي|زارية|ليلى|ليلي|أمينة|امينة|أماني|اماني|فاطمة|فاطمه|منى|مني|إيمان|ايمان|سناء|نورا|نورة|رنا|ريم|سارة|ساره|مريم|هالة|هاله)/i;
+const MALE_AR = /(shakir|hamed|naayf|bassel|moaz|rami|taim|hamdan|omar|jamal|fahed|abdullah|ali\b|majed|maged|tarik|male|شاكر|حامد|نايف|باسل|معاذ|رامي|تيم|حمدان|عمر|جمال|فهد|عبدالله|عبد الله|ماجد|طارق)/i;
+const SHAKIR = /(shakir|شاكر)/i;
 function pickMaleArabicVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
   const ar = voices.filter((x) => /^ar/i.test(x.lang));
-  return ar.find((x) => /shakir/i.test(x.name))                                   // Edge: Microsoft Shakir Online (Natural) – ar-EG male
-    ?? ar.find((x) => /^ar-EG/i.test(x.lang) && MALE_AR.test(x.name))
+  const eg = ar.filter((x) => /^ar[-_]EG/i.test(x.lang));
+  return ar.find((x) => SHAKIR.test(x.name) || SHAKIR.test(x.voiceURI))            // Edge: Microsoft Shakir Online (Natural) – ar-EG male
+    ?? eg.find((x) => MALE_AR.test(x.name))
+    ?? eg.find((x) => /online|natural/i.test(x.name) && !FEMALE_AR.test(x.name))  // ar-EG online voice that is not Salma = Shakir
     ?? ar.find((x) => MALE_AR.test(x.name) && !FEMALE_AR.test(x.name))             // other Arabic male (e.g. Hamed, Naayf)
     ?? ar.find((x) => !FEMALE_AR.test(x.name))
     ?? ar[0];                                                                        // only female available (warned on screen)
@@ -90,15 +95,14 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
   const browserSpeak = async (text: string) => {
     const ss = window.speechSynthesis; if (!ss) return;
     // voice list loads asynchronously (Chrome/Edge): wait for it, else the browser's default (often female) is used
-    if (!ss.getVoices().length) await new Promise<void>((r) => { ss.addEventListener('voiceschanged', () => r(), { once: true }); setTimeout(r, 2000); });
+    // Edge adds its ONLINE voices (Shakir) a moment after the local ones → wait until Shakir appears (max 3 s)
+    const hasShakir = () => !!pickMaleArabicVoice(ss.getVoices()) && SHAKIR.test(pickMaleArabicVoice(ss.getVoices())!.name);
+    for (let i = 0; i < 15 && !hasShakir(); i++) await new Promise((r) => setTimeout(r, 200));
     return speakWith(ss, text);
   };
   const speakWith = (ss: SpeechSynthesis, text: string) => new Promise<void>((res) => {
     const v = pickMaleArabicVoice(ss.getVoices());
-    setAudioNote(!v ? '⚠ لا يوجد صوت عربي في المتصفح – افتح الشاشة في Microsoft Edge'
-      : /shakir/i.test(v.name) ? ''
-      : FEMALE_AR.test(v.name) ? `⚠ صوت نسائي فقط في هذا المتصفح (${v.name}) – افتح الشاشة في Microsoft Edge للصوت الرجالي المصري`
-      : `⚠ صوت رجالي غير مصري (${v.name}) – افتح الشاشة في Microsoft Edge لصوت «شاكر» المصري`);
+    if (v && !SHAKIR.test(v.name)) console.warn('[queue] Egyptian male voice (Shakir) not found, using', v.name);
     const u = new SpeechSynthesisUtterance(text);
     const pb = stRef.current?.playback ?? {};
     if (v) u.voice = v; u.lang = v?.lang || 'ar-EG';
@@ -316,7 +320,6 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
         <footer className="flex items-center gap-4 overflow-hidden border-t border-white/10 bg-ink-900/60 px-[3vw] py-[1.4vh] text-[1.5vw]">
           <div className="flex-1 truncate text-white/70">{st?.display?.ticker}</div>
           <div className="flex items-center gap-3 text-[1.1vw] text-white/50">
-            {audioNote && <span className="text-amber-300">{audioNote}</span>}
             {s?.paused && <span className="text-amber-300">النداء الصوتي متوقف</span>}
             <span>{audioOn ? '🔊' : '🔇'}</span>
             <span className={`h-[1vw] w-[1vw] rounded-full ${online && live && !stale ? 'bg-emerald-400' : online && !stale ? 'bg-amber-400' : 'bg-rose-500'}`} />

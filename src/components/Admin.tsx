@@ -107,7 +107,7 @@ function VoiceTab({ s, setS, setV, save, clinic, tts }: any) {
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       const ss = window.speechSynthesis; const vs = ss?.getVoices() ?? [];
-      const bv = vs.find((x) => /shakir/i.test(x.name)) ?? vs.find((x) => x.lang === 'ar-EG');
+      const bv = vs.find((x) => /shakir|شاكر/i.test(x.name)) ?? vs.find((x) => /^ar[-_]EG/i.test(x.lang) && !/hoda|salma|هدى|سلمى/i.test(x.name));
       if (ss) { const u = new SpeechSynthesisUtterance(j.text || text || ''); if (bv) u.voice = bv; u.lang = 'ar-EG'; ss.speak(u); }
       alert(`خدمة الصوت غير مُعدّة (${j.error}). تم التشغيل بصوت المتصفح ${bv ? `(${bv.name})` : '(غير مصري)'} للتجربة فقط.`);
       return;
