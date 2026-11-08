@@ -61,8 +61,9 @@ export default function Reception({ clinic }: { clinic: string }) {
     try {
       const r = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force }) });
       const j = await r.json();
-      if (!j.skipped) setSync({ ok: !!j.ok, at: Date.now(), error: j.error });
-    } catch (e: any) { setSync({ ok: false, at: Date.now(), error: String(e?.message || e) }); }
+      if (!j.skipped && !j.requested) setSync({ ok: !!j.ok, at: Date.now(), error: j.error });
+      return j;
+    } catch (e: any) { setSync({ ok: false, at: Date.now(), error: String(e?.message || e) }); return null; }
   }, []);
 
   // initial + 10 s sheet sync loop (server throttles across devices)
@@ -211,7 +212,19 @@ export default function Reception({ clinic }: { clinic: string }) {
           <button className="btn-ghost py-4" disabled={(!inRoom.length && current?.status !== 'called') || !!busy} onClick={() => act('done')}>✅ {t('finish')}</button>
         </section>
         <section className="flex flex-wrap gap-2 text-sm">
-          <button className="btn-ghost" onClick={async () => { setBusy('sync'); await doSync(true); await load(); setBusy(null); }} disabled={!!busy}>⟳ {t('refresh')}</button>
+          <button className="btn-ghost" onClick={async () => {
+            setBusy('sync');
+            const j: any = await doSync(true);
+            await load();
+            if (j?.requested) {
+              // list comes from the clinic PC: it pushes within ~10 s of this request
+              if (!j.owner) flash('لا يوجد جهاز عيادة يرسل القائمة اليوم – شغّل جهاز العيادة', 'err');
+              else if ((j.seen_seconds_ago ?? 0) > 180) flash(`جهاز العيادة (${j.owner}) متوقف منذ ${Math.round(j.seen_seconds_ago / 60)} دقيقة`, 'err');
+              else flash(`تم طلب التحديث من جهاز العيادة (${j.owner}) – خلال ثوانٍ`);
+              [5000, 10000, 16000].forEach((ms) => setTimeout(load, ms));
+            }
+            setBusy(null);
+          }} disabled={!!busy}>⟳ {t('refresh')}</button>
           <button className="btn-ghost" onClick={() => act(data.day?.paused ? 'resume' : 'pause')} disabled={!!busy}>{data.day?.paused ? `▶ ${t('resume')}` : `⏸ ${t('pause')}`}</button>
           <button className="btn-ghost" disabled={!data.last_action || !!busy} title={data.last_action ? ACTION_AR[data.last_action.action] : ''}
             onClick={() => setDialog({ type: 'confirm', text: `التراجع عن آخر إجراء: «${ACTION_AR[data.last_action.action]}» (${data.last_action.actor ?? ''})؟`, run: () => act('undo') })}>
