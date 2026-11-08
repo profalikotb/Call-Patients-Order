@@ -71,6 +71,13 @@ export async function GET() {
   }
 
   // Google Sheet feed (Apps Script web app) – the same request the queue makes
+  if ((e.SHEET_SOURCE || '') === 'push') {
+    const { data: days } = await db().from('queue_days').select('clinic_id, last_sync_ok_at, last_sync_error')
+      .eq('service_date', new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date()));
+    report.push_from_desktop = (days ?? []).length
+      ? (days ?? []).map((d: any) => `${d.clinic_id}: last push ${d.last_sync_ok_at ?? 'never'}${d.last_sync_error ? ' – ERROR ' + d.last_sync_error : ''}`).join(' | ')
+      : 'no push received today yet';
+  }
   if ((e.SHEET_SOURCE || '') === 'appsscript') {
     try {
       const u = new URL(clean(e.APPS_SCRIPT_FEED_URL));

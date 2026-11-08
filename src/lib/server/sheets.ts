@@ -2,13 +2,15 @@
 //   google     – Sheets API v4 with a service account (recommended; read-only scope)
 //   appsscript – your own Apps Script web app returning {values:[[…]]} (no GCP setup)
 //   demo       – generated sample data (DEMO_MODE=1 implies this)
+//   push       – nothing is pulled: the clinic desktop pushes Oracle rows to /api/integrations/push
+import { clean } from '../envClean';
 import { SignJWT, importPKCS8 } from 'jose';
 import { demoValues } from './demo';
 
 let token: { v: string; exp: number } | null = null;
 const valuesCache = new Map<string, { at: number; v: unknown[][] }>();
 
-export function sheetSource(): 'google' | 'appsscript' | 'demo' {
+export function sheetSource(): 'google' | 'appsscript' | 'demo' | 'push' {
   if (process.env.DEMO_MODE === '1') return 'demo';
   return (process.env.SHEET_SOURCE as any) || 'google';
 }
@@ -48,9 +50,14 @@ export async function readSheetValues(tab: string, maxAgeMs = 3000): Promise<unk
   if (c && Date.now() - c.at < maxAgeMs) return c.v;
   let values: unknown[][];
   if (src === 'demo') values = demoValues();
+  else if (src === 'push') throw new Error('SHEET_SOURCE=push: data arrives from the clinic desktop (Queue-Push), nothing to read');
   else if (src === 'appsscript') {
-    const u = new URL(process.env.APPS_SCRIPT_FEED_URL || '');
-    u.searchParams.set('token', process.env.APPS_SCRIPT_FEED_TOKEN || '');
+    const rawUrl = clean(process.env.APPS_SCRIPT_FEED_URL);
+    if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec$/.test(rawUrl))
+      throw new Error(`APPS_SCRIPT_FEED_URL is not a Web App URL (got "${rawUrl.slice(0, 40)}${rawUrl.length > 40 ? '…' : ''}"). ` +
+        'It must look like https://script.google.com/macros/s/…/exec');
+    const u = new URL(rawUrl);
+    u.searchParams.set('token', clean(process.env.APPS_SCRIPT_FEED_TOKEN));
     if (tab) u.searchParams.set('tab', tab);
     const r = await withTimeout(u.toString(), { redirect: 'follow' });
     if (!r.ok) throw new Error(`Apps Script feed ${r.status}`);
