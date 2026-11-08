@@ -90,6 +90,32 @@ Private Function FindBookingNo(ByVal frm As Form, ByVal fieldName As String, ByR
     Next ctl
 End Function
 
+' One-time repair: every button in every form whose On Click is =QueueCallBooking(...)
+' becomes =QueueCallSelected()  (works when the list is in a subform).
+' Run once in the Immediate window (Ctrl+G):   QueueFixButtons
+Public Sub QueueFixButtons()
+    Dim ao As AccessObject, frm As Form, ctl As Control, n As Long, wasOpen As Boolean
+    For Each ao In CurrentProject.AllForms
+        wasOpen = ao.IsLoaded
+        If wasOpen Then DoCmd.Close acForm, ao.Name, acSaveYes
+        DoCmd.OpenForm ao.Name, acDesign, , , , acHidden
+        Set frm = Forms(ao.Name)
+        Dim changed As Boolean: changed = False
+        For Each ctl In frm.Controls
+            If ctl.ControlType = acCommandButton Then
+                If InStr(1, ctl.OnClick, "QueueCallBooking", vbTextCompare) > 0 Then
+                    Debug.Print ao.Name & " / " & ctl.Name & " : " & ctl.OnClick & "  ->  =QueueCallSelected()"
+                    ctl.OnClick = "=QueueCallSelected()"
+                    n = n + 1: changed = True
+                End If
+            End If
+        Next ctl
+        DoCmd.Close acForm, ao.Name, IIf(changed, acSaveYes, acSaveNo)
+        If wasOpen Then DoCmd.OpenForm ao.Name
+    Next ao
+    MsgBox n & " button(s) fixed.", vbInformation, "Smart Queue"
+End Sub
+
 Public Function QueueRepeat() As Boolean
     QueueRepeat = QueueSend("repeat", "")
 End Function
