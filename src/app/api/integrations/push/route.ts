@@ -41,10 +41,13 @@ export const POST = handle(async (req) => {
   // one PC owns today's list; another PC is refused until the owner has been silent for 3 min
   const source = S(b.source, 40) || 'desktop';
   // (before migration 005 is run the function is missing → push works as before, without the lock)
-  const lease = await rpc<any>('push_claim', { p_date: today, p_source: source, p_idle_seconds: 180 })
+  const prio = Math.max(1, Math.min(9, Number(b.priority) || 9));
+  const lease = await rpc<any>('push_claim', { p_date: today, p_source: source, p_priority: prio,
+                                               p_label: S(b.label, 60) || null, p_idle_seconds: 180 })
     .catch((e) => { if (/push_claim/.test(String(e?.message))) return { ok: true }; throw e; });
   if (!lease?.ok) return json({ ok: false, error: 'other_source', owner: lease?.owner,
-    detail: `${lease?.owner} is sending today's list (last ${lease?.seen_seconds_ago}s ago) – this PC waits until it stops for 3 min` }, 409);
+    pinned: !!lease?.pinned,
+    detail: `${lease?.owner} is sending today's list${lease?.pinned ? ' (chosen in reception)' : ''} – this PC waits` }, 409);
 
   const values: unknown[][] = [HEADERS, ...b.rows.map((r: any) => [
     S(r.call_no, 6), S(r.booking_id, 30), S(r.date, 10), S(r.clinic, 60), S(r.name, 120),
@@ -76,7 +79,9 @@ export const POST = handle(async (req) => {
 // GET /api/integrations/push?source=PC  → {want:true} when someone pressed «تحديث القائمة» since the last push
 export const GET = handle(async (req) => {
   checkToken(req);
-  const src = S(new URL(req.url).searchParams.get('source'), 40) || 'desktop';
-  const r = await rpc<any>('push_poll', { p_date: cairoDate(), p_source: src });
+  const sp = new URL(req.url).searchParams;
+  const src = S(sp.get('source'), 40) || 'desktop';
+  const r = await rpc<any>('push_poll', { p_date: cairoDate(), p_source: src,
+    p_priority: Math.max(1, Math.min(9, Number(sp.get('priority')) || 9)), p_label: S(sp.get('label'), 60) || null });
   return json({ ok: true, want: !!r?.want, owner: r?.owner ?? null });
 });

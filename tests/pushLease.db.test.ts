@@ -5,21 +5,36 @@ let pool: any;
 let q: (sql: string, p?: unknown[]) => Promise<any>;
 beforeAll(async () => { pool = await startDb(); q = async (s, p) => (await pool.query(s, p)).rows; }, 120000);
 afterAll(async () => { await stopDb(pool); });
+const claim = async (d: string, src: string, prio: number) => (await q(`select push_claim($1,$2,$3,null,180) r`, [d, src, prio]))[0].r;
+const poll = async (d: string, src: string, prio: number) => (await q(`select push_poll($1,$2,$3,null) r`, [d, src, prio]))[0].r;
 
-describe('push lease', () => {
-  it('first PC owns, second refused, takes over after idle; refresh request', async () => {
-    const d = '2026-11-08';
-    expect((await q(`select push_claim($1,'DESK',180) r`, [d]))[0].r.ok).toBe(true);
-    const r2 = (await q(`select push_claim($1,'LAP',180) r`, [d]))[0].r;
-    expect(r2.ok).toBe(false); expect(r2.owner).toBe('DESK');
-    expect((await q(`select push_poll($1,'DESK') r`, [d]))[0].r.want).toBe(false);
-    await q(`select push_request($1)`, [d]);
-    expect((await q(`select push_poll($1,'DESK') r`, [d]))[0].r.want).toBe(true);
-    await q(`select push_claim($1,'DESK',180)`, [d]);
-    expect((await q(`select push_poll($1,'DESK') r`, [d]))[0].r.want).toBe(false);
-    await q(`update push_state set owner_seen_at = now() - interval '4 minutes'`);
-    const r3 = (await q(`select push_claim($1,'LAP',180) r`, [d]))[0].r;
-    expect(r3.ok).toBe(true); expect(r3.took_over).toBe(true);
-    expect((await q(`select push_poll('2026-11-09','X') r`))[0].r.want).toBe(false);
+describe('push sources: priority, take-over, manual switch', () => {
+  const d = '2026-11-08';
+  it('priority order and automatic hand-over', async () => {
+    expect((await claim(d, 'laptop', 4)).ok).toBe(true);           // laptop first
+    expect((await claim(d, 'home', 2)).why).toBe('higher_priority'); // home outranks laptop
+    expect((await claim(d, 'laptop', 4)).ok).toBe(false);
+    expect((await claim(d, 'clinic', 1)).why).toBe('higher_priority');
+    expect((await claim(d, 'home', 2)).ok).toBe(false);
+    await q(`update push_state set owner_seen_at = now() - interval '4 minutes'`);   // clinic switched off
+    expect((await claim(d, 'laptop', 4)).why).toBe('owner_silent');
+  });
+  it('manual switch pins a lower-priority PC; refresh asks the owner only', async () => {
+    await claim(d, 'clinic', 1);
+    await poll(d, 'laptop', 4);
+    const r = (await q(`select push_request($1,'laptop') r`, [d]))[0].r;
+    expect(r.ok).toBe(true); expect(r.pinned).toBe(true);
+    expect((await poll(d, 'laptop', 4)).want).toBe(true);
+    expect((await poll(d, 'clinic', 1)).want).toBe(false);
+    expect((await claim(d, 'clinic', 1)).ok).toBe(false);          // pinned → clinic refused
+    expect((await claim(d, 'laptop', 4)).ok).toBe(true);
+    expect((await poll(d, 'laptop', 4)).want).toBe(false);
+    await q(`select push_request($1,null)`, [d]);
+    expect((await poll(d, 'laptop', 4)).want).toBe(true);
+    expect((await poll(d, 'clinic', 1)).want).toBe(false);
+    await q(`update push_sources set last_seen_at = now() - interval '5 minutes' where name='home'`);
+    expect((await q(`select push_request($1,'home') r`, [d]))[0].r.error).toBe('pc_offline');
+    const st = (await q(`select push_status($1) r`, [d]))[0].r;
+    expect(st.owner).toBe('laptop'); expect(st.sources.map((s: any) => s.name)).toEqual(['clinic', 'home', 'laptop']);
   });
 });

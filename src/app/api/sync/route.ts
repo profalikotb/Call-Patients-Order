@@ -1,20 +1,37 @@
-import { handle, json, requireStaff } from '@/lib/server/http';
+import { handle, json, requireStaff, HttpError } from '@/lib/server/http';
 import { syncAll } from '@/lib/server/sync';
 import { sheetSource } from '@/lib/server/sheets';
 import { rpc } from '@/lib/server/db';
 import { cairoDate } from '@/lib/time';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const need006 = (e: any) => {
+  const m = String(e?.message || e);
+  throw new Error(/push_(request|status)/.test(m) ? 'Run supabase/migrations/006_push_sources.sql in Supabase first' : m);
+};
+
+// GET → which clinic PCs are on and which one is sending today's list (push mode)
+export const GET = handle(async () => {
+  await requireStaff();
+  if (sheetSource() !== 'push') return json({ ok: true, source: sheetSource(), sources: [] });
+  const r = await rpc<any>('push_status', { p_date: cairoDate() }).catch(need006);
+  return json({ ok: true, source: 'push', ...r });
+});
+
+// POST {force, pc?}  push mode: force = ask the sending PC to push now; pc = switch today's list to that PC
 export const POST = handle(async (req) => {
   await requireStaff();
-  const { force } = await req.json().catch(() => ({}));
+  const { force, pc } = await req.json().catch(() => ({}));
   if (sheetSource() === 'push') {
-    // the list comes from the clinic PC: a manual refresh asks that PC to push now (it checks every ~10 s)
-    if (!force) return json({ ok: true, skipped: true, source: 'push' });
-    const r = await rpc<any>('push_request', { p_date: cairoDate() }).catch((e) => {
-      throw new Error(/push_request/.test(String(e?.message)) ? 'Run supabase/migrations/005_push_lease.sql in Supabase first' : e?.message);
-    });
-    return json({ ok: true, requested: true, source: 'push', owner: r?.owner ?? null, seen_seconds_ago: r?.seen_seconds_ago ?? null });
+    if (!force && !pc) return json({ ok: true, skipped: true, source: 'push' });
+    const name = pc ? String(pc).trim().slice(0, 40) : null;
+    const r = await rpc<any>('push_request', { p_date: cairoDate(), p_source: name }).catch(need006);
+    if (!r?.ok) throw new HttpError(409, r?.error === 'pc_offline'
+      ? `${r.label || name} غير متصل الآن – شغّل الجهاز وتأكد من الإنترنت`
+      : `جهاز غير معروف: ${name}`);
+    return json({ ok: true, requested: true, source: 'push', owner: r.owner ?? null, label: r.label ?? r.owner ?? null,
+      pinned: !!r.pinned, seen_seconds_ago: r.seen_seconds_ago ?? null });
   }
   return json(await syncAll(!!force));
 });

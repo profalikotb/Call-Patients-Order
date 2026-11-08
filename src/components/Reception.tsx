@@ -44,6 +44,10 @@ export default function Reception({ clinic }: { clinic: string }) {
   const [q, setQ] = useState('');
   const [menu, setMenu] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | { type: 'walkin' } | { type: 'number'; entry: Entry } | { type: 'confirm'; text: string; run: () => void }>(null);
+  // push mode: clinic PCs that send the list, and which PC THIS browser belongs to
+  const [pcs, setPcs] = useState<{ owner: string | null; pinned: boolean; sources: any[] } | null>(null);
+  const [thisPc, setThisPc] = useState<string>('');
+  useEffect(() => { try { setThisPc(localStorage.getItem('queue.thisPc') || ''); } catch {} }, []);
   const cooldown = useRef(0);
   const toastTimer = useRef<any>(null);
 
@@ -57,10 +61,18 @@ export default function Reception({ clinic }: { clinic: string }) {
     } catch (e: any) { setLoadErr(String(e?.message || e)); }
   }, [clinic]);
 
-  const doSync = useCallback(async (force = false) => {
+  const loadPcs = useCallback(async () => {
     try {
-      const r = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force }) });
+      const j = await (await fetch('/api/sync', { cache: 'no-store' })).json();
+      if (j.ok && j.source === 'push') setPcs({ owner: j.owner ?? null, pinned: !!j.pinned, sources: j.sources ?? [] });
+    } catch {}
+  }, []);
+
+  const doSync = useCallback(async (force = false, pc?: string) => {
+    try {
+      const r = await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force, pc }) });
       const j = await r.json();
+      if (pc) return j;                                  // switching PC: caller shows the result
       if (!j.skipped && !j.requested) setSync({ ok: !!j.ok, at: Date.now(), error: j.error });
       return j;
     } catch (e: any) { setSync({ ok: false, at: Date.now(), error: String(e?.message || e) }); return null; }
@@ -69,10 +81,10 @@ export default function Reception({ clinic }: { clinic: string }) {
   // initial + 10 s sheet sync loop (server throttles across devices)
   useEffect(() => {
     let alive = true;
-    (async () => { await doSync(true); await load(); })();
-    const id = setInterval(async () => { if (!alive || document.hidden) return; await doSync(false); await load(); }, 10000);
+    (async () => { await doSync(true); await load(); await loadPcs(); })();
+    const id = setInterval(async () => { if (!alive || document.hidden) return; await doSync(false); await load(); await loadPcs(); }, 10000);
     return () => { alive = false; clearInterval(id); };
-  }, [doSync, load]);
+  }, [doSync, load, loadPcs]);
 
   // realtime nudge from any device's action
   useEffect(() => {
@@ -214,17 +226,20 @@ export default function Reception({ clinic }: { clinic: string }) {
         <section className="flex flex-wrap gap-2 text-sm">
           <button className="btn-ghost" onClick={async () => {
             setBusy('sync');
-            const j: any = await doSync(true);
+            // pressed on a PC that is set as «هذا الجهاز» → that PC sends the list; otherwise ask the sending PC
+            const me = thisPc && pcs?.sources.find((x) => x.name === thisPc);
+            const j: any = me && pcs?.owner !== thisPc ? await doSync(true, thisPc) : await doSync(true);
             await load();
             if (j?.requested) {
-              // list comes from the clinic PC: it pushes within ~10 s of this request
-              if (!j.owner) flash('لا يوجد جهاز عيادة يرسل القائمة اليوم – شغّل جهاز العيادة', 'err');
-              else if ((j.seen_seconds_ago ?? 0) > 180) flash(`جهاز العيادة (${j.owner}) متوقف منذ ${Math.round(j.seen_seconds_ago / 60)} دقيقة`, 'err');
-              else flash(`تم طلب التحديث من جهاز العيادة (${j.owner}) – خلال ثوانٍ`);
+              const who = j.label || j.owner;
+              if (!j.owner) flash('لا يوجد جهاز يرسل القائمة اليوم – شغّل جهاز العيادة', 'err');
+              else if ((j.seen_seconds_ago ?? 0) > 180) flash(`${who} متوقف منذ ${Math.round(j.seen_seconds_ago / 60)} دقيقة – اختر جهازاً آخر`, 'err');
+              else flash(`تم طلب التحديث من ${who} – خلال ثوانٍ`);
               [5000, 10000, 16000].forEach((ms) => setTimeout(load, ms));
-            }
+              loadPcs();
+            } else if (j && !j.ok && j.error) flash(String(j.detail || j.error), 'err');
             setBusy(null);
-          }} disabled={!!busy}>⟳ {t('refresh')}</button>
+          }} disabled={!!busy}>⟳ {t('refresh')}{thisPc && pcs ? <span className="text-xs text-slate-400">({pcs.sources.find((x) => x.name === thisPc)?.label ?? thisPc})</span> : null}</button>
           <button className="btn-ghost" onClick={() => act(data.day?.paused ? 'resume' : 'pause')} disabled={!!busy}>{data.day?.paused ? `▶ ${t('resume')}` : `⏸ ${t('pause')}`}</button>
           <button className="btn-ghost" disabled={!data.last_action || !!busy} title={data.last_action ? ACTION_AR[data.last_action.action] : ''}
             onClick={() => setDialog({ type: 'confirm', text: `التراجع عن آخر إجراء: «${ACTION_AR[data.last_action.action]}» (${data.last_action.actor ?? ''})؟`, run: () => act('undo') })}>
@@ -235,6 +250,34 @@ export default function Reception({ clinic }: { clinic: string }) {
             {data.policy === 'time' ? 'ترتيب حسب الموعد' : data.policy === 'checkin' ? 'ترتيب حسب الوصول' : 'أرقام يدوية'}
           </span>
         </section>
+
+        {/* push mode: which PC sends today's list – tap to switch, 📍 = this browser's PC */}
+        {pcs && pcs.sources.length > 0 && (
+          <section className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="font-semibold text-slate-500">{ar ? 'مصدر القائمة:' : 'List source:'}</span>
+            {pcs.sources.map((pc) => {
+              const isOwner = pc.name === pcs.owner;
+              return (
+                <span key={pc.name} className={`inline-flex items-center overflow-hidden rounded-full ring-1 ${isOwner ? 'bg-emerald-600 text-white ring-emerald-600' : 'bg-white text-slate-700 ring-slate-200'}`}>
+                  <button className="px-2.5 py-1 disabled:opacity-60" disabled={!!busy || isOwner}
+                    title={pc.online ? '' : (ar ? 'غير متصل' : 'offline')}
+                    onClick={() => setDialog({ type: 'confirm', text: `تحويل قائمة اليوم إلى «${pc.label}»؟ (يُرسل القائمة من قاعدة بيانات هذا الجهاز)`, run: async () => {
+                      setBusy('pc');
+                      const j: any = await doSync(true, pc.name);
+                      if (j?.ok) { flash(`تم التحويل إلى ${pc.label} – القائمة خلال ثوانٍ`); [5000, 10000, 16000].forEach((ms) => setTimeout(load, ms)); }
+                      else flash(String(j?.error || j?.detail || 'تعذّر التحويل'), 'err');
+                      await loadPcs(); setBusy(null);
+                    } })}>
+                    <span className={pc.online ? 'text-emerald-400' : 'text-slate-400'}>●</span> {pc.label}
+                    {isOwner ? (pcs.pinned ? (ar ? ' · مختار' : ' · chosen') : (ar ? ' · يرسل الآن' : ' · sending')) : ''}
+                  </button>
+                  <button className={`border-s px-1.5 py-1 ${isOwner ? 'border-white/30' : 'border-slate-200'} ${thisPc === pc.name ? '' : 'opacity-30'}`}
+                    title={ar ? 'هذا الجهاز' : 'this PC'}
+                    onClick={() => { const v = thisPc === pc.name ? '' : pc.name; setThisPc(v); try { v ? localStorage.setItem('queue.thisPc', v) : localStorage.removeItem('queue.thisPc'); } catch {} }}>📍</button>
+                </span>);
+            })}
+          </section>
+        )}
 
         {/* list */}
         <section className="card overflow-visible">
