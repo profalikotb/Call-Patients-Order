@@ -79,3 +79,15 @@ describe('رقم النداء renumbered by the sheet', () => {
     expect(n.B).toBe(2);
   });
 });
+
+describe('seen in Oracle → done in queue', () => {
+  it('marks only the given bookings done and leaves the rest waiting', async () => {
+    await sync([row('A', 1), row('B', 2), row('C', 3)]);
+    await act('call_next');                                   // A called
+    const n = (await db.query('select queue_mark_seen($1,$2,$3::text[]) n', [T, D, ['id:A', 'id:C']])).rows[0].n;
+    expect(n).toBe(2);
+    const st = Object.fromEntries((await db.query('select booking_id, status from queue_entries where clinic_id=$1', [T])).rows.map((r) => [r.booking_id, r.status]));
+    expect(st).toEqual({ A: 'done', B: 'waiting', C: 'done' });
+    expect((await db.query('select queue_mark_seen($1,$2,$3::text[]) n', [T, D, ['id:A']])).rows[0].n).toBe(0); // idempotent
+  });
+});

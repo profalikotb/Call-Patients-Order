@@ -35,3 +35,12 @@ describe('Oracle QUEUE_TODAY tab', () => {
     expect(r.stats.unknownClinic).toBe(1);
   });
 });
+
+describe('الحالة = تم الكشف', () => {
+  it('flags seen rows', () => {
+    const r = parseSheet(values, DEFAULT_SHEET_CONFIG, clinics, '2026-11-06');
+    const t = r.rowsByClinic.toukh;
+    expect(t.find((x) => x.booking_id === '28806')!.seen).toBe(true);
+    expect(t.find((x) => x.booking_id === '28805')!.seen).toBe(false);
+  });
+});

@@ -22,7 +22,14 @@ export async function syncAll(force = false): Promise<SyncReport> {
     if (parsed.map.date < 0 || parsed.map.name < 0) throw new Error(`لم يتم التعرف على أعمدة: ${parsed.missing.join(', ')}`);
     const out: Record<string, any> = {};
     for (const id of claimed) {
-      out[id] = await rpc('queue_sync', { p_clinic: id, p_date: today, p_rows: parsed.rowsByClinic[id] ?? [], p_complete: true });
+      const rows = parsed.rowsByClinic[id] ?? [];
+      out[id] = await rpc('queue_sync', { p_clinic: id, p_date: today, p_rows: rows, p_complete: true });
+      // already examined in Oracle → done in the queue (needs migration 003; ignored if not installed)
+      const seenKeys = rows.filter((r: any) => r.seen).map((r: any) => r.booking_key);
+      if (seenKeys.length) {
+        try { out[id].seen_done = await rpc('queue_mark_seen', { p_clinic: id, p_date: today, p_keys: seenKeys }); }
+        catch (e: any) { out[id].seen_error = String(e?.message || e); }
+      }
     }
     return { ok: true, clinics: out, stats: parsed.stats, missing: parsed.missing };
   } catch (e: any) {

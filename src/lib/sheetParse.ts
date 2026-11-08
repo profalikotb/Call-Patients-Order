@@ -119,6 +119,7 @@ export interface ParsedRow {
   cancelled: boolean;
   dup_hint: string | null;
   call_no: number | null;       // fixed calling number from the sheet (optional)
+  seen?: boolean;               // «تم الكشف» in the status column → already examined (Oracle VISIT_REC)
 }
 
 export interface ParseResult {
@@ -179,6 +180,7 @@ export function parseSheet(values: unknown[][], cfg: SheetConfig, clinics: Clini
       booking_key: key, booking_id: rawId || null, name, phone,
       appt_time: minutes === null ? null : minutesToHHMM(minutes), appt_minutes: minutes,
       procedure, cancelled, dup_hint: null, call_no,
+      seen: !cancelled && containsAny(String(cell(r, 'status') ?? ''), ['تم الكشف', 'done', 'seen']),
     };
     const prev = byKey.get(key);
     if (prev) {
