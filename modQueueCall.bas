@@ -9,6 +9,7 @@ Option Explicit
 '  Button examples (On Click property or VBA):
 '     =QueueCallNext()                    next patient in the queue
 '     =QueueCallBooking([NUMBER10])       THIS patient (current record)
+'     =QueueCallSelected()                THIS patient, list in a subform
 '     =QueueRepeat()                      repeat the current call
 '     =QueueInRoom()  /  =QueueDone()     patient entered / finished
 '
@@ -34,6 +35,59 @@ Public Function QueueCallBooking(ByVal bookingId As Variant) As Boolean
         Exit Function
     End If
     QueueCallBooking = QueueSend("call", CStr(bookingId))
+End Function
+
+' Button "call THIS patient" on a form whose list is in a SUBFORM:  On Click  =QueueCallSelected()
+' Finds the booking number (NUMBER10) of the selected row in the form or any of its subforms.
+Public Function QueueCallSelected(Optional ByVal fieldName As String = "NUMBER10") As Boolean
+    Dim v As Variant, where As String
+    On Error Resume Next
+    v = FindBookingNo(Screen.ActiveForm, fieldName, where)
+    On Error GoTo 0
+    If IsEmpty(v) Then
+        MsgBox "Could not find the field " & fieldName & " in this form or its subforms." & vbCrLf & _
+               "Fields seen: " & where, vbExclamation, "Smart Queue"
+        Exit Function
+    End If
+    If IsNull(v) Or Trim$(Nz(v, "")) = "" Then
+        MsgBox "Select a patient row in the list first.", vbExclamation, "Smart Queue"
+        Exit Function
+    End If
+    QueueCallSelected = QueueSend("call", CStr(v))
+End Function
+
+' Returns Empty when the field does not exist; Null when no row is selected.
+Private Function FindBookingNo(ByVal frm As Form, ByVal fieldName As String, ByRef seen As String) As Variant
+    Dim ctl As Control, v As Variant, i As Integer
+    FindBookingNo = Empty
+    ' 1) a control with that name on this form
+    On Error Resume Next
+    v = frm.Controls(fieldName).Value
+    If Err.Number = 0 Then FindBookingNo = v: Exit Function
+    Err.Clear
+    ' 2) a field in this form's records (works even if the column is hidden)
+    v = frm.Recordset.Fields(fieldName).Value
+    If Err.Number = 0 Then
+        If frm.Recordset.EOF Or frm.Recordset.BOF Then FindBookingNo = Null Else FindBookingNo = v
+        Exit Function
+    End If
+    Err.Clear
+    Dim n As Integer: n = -1
+    n = frm.Recordset.Fields.Count          ' stays -1 for an unbound form
+    Err.Clear
+    For i = 0 To n - 1
+        If Len(seen) < 250 Then seen = seen & frm.Name & "." & frm.Recordset.Fields(i).Name & " "
+    Next i
+    Err.Clear
+    ' 3) every subform on this form
+    For Each ctl In frm.Controls
+        If ctl.ControlType = acSubform Then
+            v = Empty
+            v = FindBookingNo(ctl.Form, fieldName, seen)
+            If Err.Number = 0 And Not IsEmpty(v) Then FindBookingNo = v: Exit Function
+            Err.Clear
+        End If
+    Next ctl
 End Function
 
 Public Function QueueRepeat() As Boolean
