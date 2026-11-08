@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 const need006 = (e: any) => {
   const m = String(e?.message || e);
-  throw new Error(/push_(request|status)/.test(m) ? 'Run supabase/migrations/006_push_sources.sql in Supabase first' : m);
+  throw new Error(/push_(request|status)/.test(m) ? 'Run supabase/migrations/006_push_sources.sql and 007_push_choice.sql in Supabase first' : m);
 };
 
 // GET → which clinic PCs are on and which one is sending today's list (push mode)
@@ -31,7 +31,7 @@ export const POST = handle(async (req) => {
       ? `${r.label || name} غير متصل الآن – شغّل الجهاز وتأكد من الإنترنت`
       : `جهاز غير معروف: ${name}`);
     return json({ ok: true, requested: true, source: 'push', owner: r.owner ?? null, label: r.label ?? r.owner ?? null,
-      pinned: !!r.pinned, seen_seconds_ago: r.seen_seconds_ago ?? null });
+      pinned: !!r.pinned, seen_seconds_ago: r.seen_seconds_ago ?? null, pc_error: r.error ?? null });
   }
   return json(await syncAll(!!force));
 });

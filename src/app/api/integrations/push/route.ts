@@ -82,6 +82,7 @@ export const GET = handle(async (req) => {
   const sp = new URL(req.url).searchParams;
   const src = S(sp.get('source'), 40) || 'desktop';
   const r = await rpc<any>('push_poll', { p_date: cairoDate(), p_source: src,
-    p_priority: Math.max(1, Math.min(9, Number(sp.get('priority')) || 9)), p_label: S(sp.get('label'), 60) || null });
+    p_priority: Math.max(1, Math.min(9, Number(sp.get('priority')) || 9)), p_label: S(sp.get('label'), 60) || null,
+    p_error: S(sp.get('err'), 300) || null });
   return json({ ok: true, want: !!r?.want, owner: r?.owner ?? null });
 });

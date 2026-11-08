@@ -45,7 +45,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   const [menu, setMenu] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | { type: 'walkin' } | { type: 'number'; entry: Entry } | { type: 'confirm'; text: string; run: () => void }>(null);
   // push mode: clinic PCs that send the list, and which PC THIS browser belongs to
-  const [pcs, setPcs] = useState<{ owner: string | null; pinned: boolean; sources: any[] } | null>(null);
+  const [pcs, setPcs] = useState<{ owner: string | null; pinned: boolean; ownerAgo: number | null; sources: any[] } | null>(null);
   const [thisPc, setThisPc] = useState<string>('');
   useEffect(() => { try { setThisPc(localStorage.getItem('queue.thisPc') || ''); } catch {} }, []);
   const cooldown = useRef(0);
@@ -64,7 +64,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   const loadPcs = useCallback(async () => {
     try {
       const j = await (await fetch('/api/sync', { cache: 'no-store' })).json();
-      if (j.ok && j.source === 'push') setPcs({ owner: j.owner ?? null, pinned: !!j.pinned, sources: j.sources ?? [] });
+      if (j.ok && j.source === 'push') setPcs({ owner: j.owner ?? null, pinned: !!j.pinned, ownerAgo: j.owner_seen_seconds_ago ?? null, sources: j.sources ?? [] });
     } catch {}
   }, []);
 
@@ -251,24 +251,41 @@ export default function Reception({ clinic }: { clinic: string }) {
           </span>
         </section>
 
-        {/* push mode: which PC sends today's list – tap to switch, 📍 = this browser's PC */}
-        {pcs && pcs.sources.length > 0 && (
+        {/* push mode: which PC sends today's list – tap to choose (stays all day), «تلقائي» = by priority, 📍 = this browser's PC */}
+        {pcs && pcs.sources.length > 0 && (() => {
+          const own = pcs.sources.find((x) => x.name === pcs.owner);
+          const stale = own && (pcs.ownerAgo ?? 0) > 90;
+          return (<>
+          {own && (own.error || stale) && (
+            <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800 ring-1 ring-rose-200" dir="auto">
+              ⚠ {own.label}: {own.error ? own.error : `لم يرسل القائمة منذ ${Math.round((pcs.ownerAgo ?? 0) / 60)} دقيقة`}
+              {!own.online ? ' — الجهاز غير متصل' : ''}
+            </div>)}
           <section className="flex flex-wrap items-center gap-1.5 text-xs">
             <span className="font-semibold text-slate-500">{ar ? 'مصدر القائمة:' : 'List source:'}</span>
+            <button className={`rounded-full px-2.5 py-1 ring-1 ${!pcs.pinned ? 'bg-emerald-600 text-white ring-emerald-600' : 'bg-white text-slate-700 ring-slate-200'}`}
+              disabled={!!busy || !pcs.pinned} title="الجهاز الأعلى أولوية المتصل يرسل القائمة"
+              onClick={async () => {
+                setBusy('pc');
+                const j: any = await doSync(true, 'auto');
+                if (j?.ok) { flash(`تلقائي حسب الأولوية – ${j.label ?? ''}`); [5000, 10000, 16000].forEach((ms) => setTimeout(load, ms)); }
+                else flash(String(j?.error || j?.detail || 'تعذّر'), 'err');
+                await loadPcs(); setBusy(null);
+              }}>⚙ {ar ? 'تلقائي' : 'Auto'}</button>
             {pcs.sources.map((pc) => {
               const isOwner = pc.name === pcs.owner;
               return (
                 <span key={pc.name} className={`inline-flex items-center overflow-hidden rounded-full ring-1 ${isOwner ? 'bg-emerald-600 text-white ring-emerald-600' : 'bg-white text-slate-700 ring-slate-200'}`}>
                   <button className="px-2.5 py-1 disabled:opacity-60" disabled={!!busy || isOwner}
-                    title={pc.online ? '' : (ar ? 'غير متصل' : 'offline')}
-                    onClick={() => setDialog({ type: 'confirm', text: `تحويل قائمة اليوم إلى «${pc.label}»؟ (يُرسل القائمة من قاعدة بيانات هذا الجهاز)`, run: async () => {
+                        title={pc.error || (pc.online ? '' : (ar ? 'غير متصل' : 'offline'))}
+                    onClick={() => setDialog({ type: 'confirm', text: `تحويل قائمة اليوم إلى «${pc.label}»؟ يبقى هو المصدر طوال اليوم حتى تختار جهازاً آخر أو «تلقائي» (القائمة من قاعدة بيانات هذا الجهاز)`, run: async () => {
                       setBusy('pc');
                       const j: any = await doSync(true, pc.name);
                       if (j?.ok) { flash(`تم التحويل إلى ${pc.label} – القائمة خلال ثوانٍ`); [5000, 10000, 16000].forEach((ms) => setTimeout(load, ms)); }
                       else flash(String(j?.error || j?.detail || 'تعذّر التحويل'), 'err');
                       await loadPcs(); setBusy(null);
                     } })}>
-                    <span className={pc.online ? 'text-emerald-400' : 'text-slate-400'}>●</span> {pc.label}
+                    <span className={pc.error ? 'text-rose-500' : pc.online ? 'text-emerald-400' : 'text-slate-400'}>●</span> {pc.label}
                     {isOwner ? (pcs.pinned ? (ar ? ' · مختار' : ' · chosen') : (ar ? ' · يرسل الآن' : ' · sending')) : ''}
                   </button>
                   <button className={`border-s px-1.5 py-1 ${isOwner ? 'border-white/30' : 'border-slate-200'} ${thisPc === pc.name ? '' : 'opacity-30'}`}
@@ -277,7 +294,8 @@ export default function Reception({ clinic }: { clinic: string }) {
                 </span>);
             })}
           </section>
-        )}
+          </>);
+        })()}
 
         {/* list */}
         <section className="card overflow-visible">
