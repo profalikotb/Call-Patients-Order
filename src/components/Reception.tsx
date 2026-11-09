@@ -158,6 +158,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (data?.messages?.length) return;                 // doctor's message must be answered first
       const cur = (data?.entries ?? []).find((x: any) => x.id === data?.day?.current_entry_id);
       if (e.key === 'F8') { e.preventDefault(); act('call_next', null, {}, true); }
       else if (e.key === 'F9') { e.preventDefault(); doneAndNext(); }
@@ -681,23 +682,34 @@ function DoctorMessages({ clinic, msgs, reload }: { clinic: string; msgs: any[];
   }, []);
   useEffect(() => {
     if (!msgs.length) return;
-    // classic telephone ring: two «brr» bursts (440 + 480 Hz, warbling 20×/s), repeated every 2 s until «تم ✓»
-    const burst = (c: AudioContext, t: number) => {
-      const g = c.createGain(); g.gain.value = 0; g.connect(c.destination);
-      const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 20; lg.gain.value = 0.35;
-      lfo.connect(lg).connect(g.gain);
-      [440, 480].forEach((f) => { const o = c.createOscillator(); o.frequency.value = f; o.connect(g); o.start(t); o.stop(t + 0.4); });
-      lfo.start(t); lfo.stop(t + 0.4);
+    // LOUD, annoying alarm ring (square waves 1000/1400 Hz through a compressor = maximum loudness),
+    // non-stop until «تم ✓»; gets faster after 15 s. Pauses only while a voice note plays.
+    const started = Date.now();
+    const out = (c: AudioContext) => {
+      const comp = c.createDynamicsCompressor(); comp.threshold.value = -30; comp.ratio.value = 12;
+      const master = c.createGain(); master.gain.value = 1.6; master.connect(comp).connect(c.destination); return master;
     };
+    const beep = (c: AudioContext, dest: AudioNode, f: number, t: number, d: number) => {
+      const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.01);
+      g.gain.setValueAtTime(0.9, t + d - 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g).connect(dest); o.start(t); o.stop(t + d);
+    };
+    let id: any;
     const ring = () => {
-      const c = ctx.current; if (!c || Date.now() < quietUntil.current) return;   // quiet while a voice note plays
-      burst(c, c.currentTime); burst(c, c.currentTime + 0.6);
+      const c = ctx.current;
+      if (c && Date.now() >= quietUntil.current) {
+        c.resume().catch(() => {});
+        const dest = out(c), t = c.currentTime;
+        for (let i = 0; i < 6; i++) beep(c, dest, i % 2 ? 1400 : 1000, t + i * 0.13, 0.12);   // «ti-ta-ti-ta-ti-ta»
+      }
+      id = setTimeout(ring, Date.now() - started > 15000 ? 700 : 1100);
     };
-    ring(); const id = setInterval(ring, 2000);
+    ring();
     const title = document.title; let on = false;
     const blink = setInterval(() => { on = !on; document.title = on ? '🔔 رسالة من الطبيب' : title; }, 800);
     try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('رسالة من الطبيب', { body: msgs[0].body }); } catch {}
-    return () => { clearInterval(id); clearInterval(blink); document.title = title; };
+    return () => { clearTimeout(id); clearInterval(blink); document.title = title; };
   }, [msgs.length, msgs]);
   useEffect(() => { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} }, []);
   // voice notes play by themselves once (after the chime); ▶ plays again
@@ -721,16 +733,17 @@ function DoctorMessages({ clinic, msgs, reload }: { clinic: string; msgs: any[];
   };
   const time = (t: string) => new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' }).format(new Date(t));
   return (
-    <div className="fixed inset-0 z-[60] space-y-1 bg-rose-900/40 p-2 backdrop-blur-[1px]">
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-rose-950/90 p-4 backdrop-blur-sm">
+      <div className="pointer-events-none absolute inset-0 animate-pulse bg-rose-600/40" />
       {msgs.slice(0, 3).map((m) => (
-        <div key={m.id} className="mx-auto flex max-w-3xl animate-pulse items-center gap-3 rounded-2xl bg-rose-600 px-5 py-4 text-white shadow-2xl ring-4 ring-rose-300">
-          <span className="text-3xl">🔔</span>
+        <div key={m.id} className="relative flex w-full max-w-4xl items-center gap-4 rounded-3xl bg-rose-600 px-6 py-6 text-white shadow-2xl ring-8 ring-yellow-300">
+          <span className="animate-bounce text-6xl">🔔</span>
           <div className="flex-1">
-            <div className="text-xl font-black">{m.body}</div>
+            <div className="text-3xl font-black leading-tight sm:text-4xl">{m.body}</div>
             <div className="text-xs opacity-80">{m.from_label ?? 'الطبيب'} · {time(m.created_at)}</div>
           </div>
           {m.audio_path && <button onClick={() => play(m)} className="rounded-xl bg-white/20 px-4 py-2 text-lg font-black">▶</button>}
-          <button onClick={() => ack(m.id)} className="rounded-xl bg-white px-5 py-2 text-lg font-black text-rose-700">تم ✓</button>
+          <button onClick={() => ack(m.id)} autoFocus className="rounded-2xl bg-white px-8 py-5 text-3xl font-black text-rose-700 shadow-xl hover:bg-yellow-100">تم ✓</button>
         </div>))}
     </div>
   );
