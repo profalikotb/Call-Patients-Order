@@ -52,9 +52,23 @@ export interface ClinicSettings {
   display: DisplaySettings;
 }
 
+// Microsoft Arabic MALE neural voices – same voices in Azure (server) and Edge (TV browser, free)
+export const ARABIC_MALE_VOICES: { id: string; en: string; ar: string; label: string }[] = [
+  { id: 'ar-BH-AliNeural', en: 'Ali', ar: 'علي', label: 'علي – البحرين' },
+  { id: 'ar-EG-ShakirNeural', en: 'Shakir', ar: 'شاكر', label: 'شاكر – مصر' },
+  { id: 'ar-SA-HamedNeural', en: 'Hamed', ar: 'حامد', label: 'حامد – السعودية' },
+  { id: 'ar-AE-HamdanNeural', en: 'Hamdan', ar: 'حمدان', label: 'حمدان – الإمارات' },
+  { id: 'ar-KW-FahedNeural', en: 'Fahed', ar: 'فهد', label: 'فهد – الكويت' },
+  { id: 'ar-QA-MoazNeural', en: 'Moaz', ar: 'معاذ', label: 'معاذ – قطر' },
+  { id: 'ar-OM-AbdullahNeural', en: 'Abdullah', ar: 'عبدالله', label: 'عبدالله – عمان' },
+  { id: 'ar-JO-TaimNeural', en: 'Taim', ar: 'تيم', label: 'تيم – الأردن' },
+  { id: 'ar-LB-RamiNeural', en: 'Rami', ar: 'رامي', label: 'رامي – لبنان' },
+  { id: 'ar-MA-JamalNeural', en: 'Jamal', ar: 'جمال', label: 'جمال – المغرب' },
+];
+
 export const DEFAULT_VOICE: VoiceSettings = {
   provider: 'azure',
-  azureVoice: 'ar-EG-ShakirNeural',
+  azureVoice: 'ar-BH-AliNeural',
   elevenVoiceId: '',
   rate: -8,
   pitch: -2,

@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { FIELD_LABEL_AR, FIELDS, type ClinicSettings, type SheetConfig, type Field } from '@/lib/config';
+import { FIELD_LABEL_AR, FIELDS, ARABIC_MALE_VOICES, type ClinicSettings, type SheetConfig, type Field } from '@/lib/config';
+import { pickVoice } from '@/lib/browserVoice';
 import { spellNumber } from '@/lib/numbers';
 import { renderAnnouncement } from '@/lib/announce';
 import { toArabicDigits } from '@/lib/arabic';
@@ -107,9 +108,13 @@ function VoiceTab({ s, setS, setV, save, clinic, tts }: any) {
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       const ss = window.speechSynthesis; const vs = ss?.getVoices() ?? [];
-      const bv = vs.find((x) => /shakir|شاكر/i.test(x.name)) ?? vs.find((x) => /^ar[-_]EG/i.test(x.lang) && !/hoda|salma|هدى|سلمى/i.test(x.name));
-      if (ss) { const u = new SpeechSynthesisUtterance(j.text || text || ''); if (bv) u.voice = bv; u.lang = 'ar-EG'; ss.speak(u); }
-      alert(`خدمة الصوت غير مُعدّة (${j.error}). تم التشغيل بصوت المتصفح ${bv ? `(${bv.name})` : '(غير مصري)'} للتجربة فقط.`);
+      const bv = pickVoice(vs, v.azureVoice);
+      if (ss) {
+        const u = new SpeechSynthesisUtterance(j.text || text || ''); if (bv) u.voice = bv; u.lang = bv?.lang || 'ar';
+        u.rate = Math.min(1.3, Math.max(0.6, 1 + v.rate / 100)); u.pitch = Math.min(1.4, Math.max(0.6, 1 + v.pitch / 50));
+        ss.cancel(); ss.speak(u);
+      }
+      if (!bv) alert('لا يوجد صوت عربي في هذا المتصفح – افتح الصفحة في Microsoft Edge');
       return;
     }
     const url = URL.createObjectURL(await r.blob());
@@ -134,16 +139,17 @@ function VoiceTab({ s, setS, setV, save, clinic, tts }: any) {
           <div><label className="label">مزود الصوت</label>
             <select className="input" value={v.provider} onChange={(e) => setV('provider', e.target.value)}>
               <option value="azure">Azure Neural (مصري)</option><option value="elevenlabs">ElevenLabs (صوت مخصص)</option></select></div>
-          <div><label className="label">صوت Azure (ذكر – مصري)</label>
+          <div><label className="label">الصوت (رجالي)</label>
             <select className="input" value={v.azureVoice} onChange={(e) => setV('azureVoice', e.target.value)}>
-              <option value="ar-EG-ShakirNeural">ar-EG-ShakirNeural – شاكر (مصري، ذكر)</option></select>
-            <p className="mt-1 text-[11px] text-slate-500">الصوت الذكوري الوحيد بلهجة مصرية في Azure. الأصوات العربية الأخرى ليست مصرية.</p></div>
+              {ARABIC_MALE_VOICES.map((x) => <option key={x.id} value={x.id}>{x.label} ({x.en})</option>)}</select>
+            <p className="mt-1 text-[11px] text-slate-500">نفس الصوت على شاشة الانتظار في Microsoft Edge (مجاناً) وفي Azure. «شاكر» هو الصوت المصري الوحيد.</p></div>
           <div><label className="label">ElevenLabs Voice ID (اختياري)</label><input className="input" dir="ltr" value={v.elevenVoiceId} onChange={(e) => setV('elevenVoiceId', e.target.value.trim())} placeholder="اختر صوت رجالي مصري من المكتبة" /></div>
         </div>
         <div className="flex flex-wrap items-center gap-2 rounded-xl bg-ink-950/5 p-3 text-sm">
           <span className="font-semibold">إعداد سريع:</span>
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-BH-AliNeural', rate: -8, pitch: -4, volume: 1.2, repeatCount: 2, repeatDelaySec: 3, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>🔊 صوت «علي»</button>
           <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-EG-ShakirNeural', rate: -12, pitch: -10, volume: 1.3, repeatCount: 2, repeatDelaySec: 3, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>🔊 صوت رجالي مصري قوي</button>
-          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-EG-ShakirNeural', rate: -8, pitch: -2, volume: 1, repeatCount: 2, repeatDelaySec: 4, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>↺ الافتراضي</button>
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-BH-AliNeural', rate: -8, pitch: -2, volume: 1, repeatCount: 2, repeatDelaySec: 4, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>↺ الافتراضي</button>
           <span className="text-[11px] text-slate-500">ثم «حفظ إعدادات الصوت»</span>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
