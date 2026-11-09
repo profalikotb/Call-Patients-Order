@@ -70,7 +70,7 @@ export const ARABIC_MALE_VOICES: { id: string; en: string; ar: string; label: st
 export const MAMDOH_VOICE_ID = '68MRVrnQAt8vLbu0FCzw';
 
 export const DEFAULT_VOICE: VoiceSettings = {
-  provider: 'elevenlabs',
+  provider: 'azure',                       // free: Shakir in Edge (no Azure key) · 'elevenlabs' = Mamdoh (paid plan)
   azureVoice: 'ar-EG-ShakirNeural',
   elevenVoiceId: MAMDOH_VOICE_ID,
   rate: -8,
