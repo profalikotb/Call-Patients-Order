@@ -143,16 +143,30 @@ export default function Reception({ clinic }: { clinic: string }) {
     finally { setBusy(null); load(); }
   }, [busy, clinic, data, load, ar]);
 
-  // keyboard: F8 call next · F7 repeat (ignored while typing)
+  // finish the patient in the room / current call, then call the next one – one press
+  const doneAndNext = useCallback(async () => {
+    const cur = (data?.entries ?? []).find((e: any) => e.id === data?.day?.current_entry_id);
+    const hasOpen = (data?.entries ?? []).some((e: any) => e.status === 'in_room') || cur?.status === 'called';
+    if (hasOpen) await act('done');
+    await act('call_next', null, {}, false);
+  }, [act, data]);
+
+  // keyboard (ignored while typing, except Enter in search):
+  // F8 call next · F9 done + next · F7/F10 repeat · F6 patient entered · / search
+  const searchRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      const cur = (data?.entries ?? []).find((x: any) => x.id === data?.day?.current_entry_id);
       if (e.key === 'F8') { e.preventDefault(); act('call_next', null, {}, true); }
-      if (e.key === 'F7') { e.preventDefault(); act('repeat'); }
+      else if (e.key === 'F9') { e.preventDefault(); doneAndNext(); }
+      else if (e.key === 'F7' || e.key === 'F10') { e.preventDefault(); act('repeat'); }
+      else if (e.key === 'F6') { e.preventDefault(); if (cur?.status === 'called') act('in_room', cur.id); }
+      else if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [act]);
+  }, [act, doneAndNext, data]);
 
   const entries: Entry[] = data?.entries ?? [];
   const current = entries.find((e) => e.id === data?.day?.current_entry_id) ?? null;
@@ -164,7 +178,7 @@ export default function Reception({ clinic }: { clinic: string }) {
       if (filter !== 'active' && filter !== 'all' && e.status !== filter) return false;
       if (!q) return true;
       return normalizeAr(e.patient_name).includes(nq) || (e.booking_id && normalizeAr(e.booking_id).includes(nq)) ||
-        (dq.length >= 1 && String(e.patient_code ?? '') === dq) ||
+        (dq.length >= 1 && String(e.patient_code ?? '').startsWith(dq)) ||
         (dq.length >= 2 && ((e.phone ?? '').includes(dq) || String(e.queue_number ?? '') === dq));
     });
   }, [entries, filter, q]);
@@ -204,40 +218,70 @@ export default function Reception({ clinic }: { clinic: string }) {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-4 px-3 pt-4 sm:px-5">
-        {/* stats + current */}
-        <section className="grid gap-3 lg:grid-cols-[1.3fr_2fr]">
-          <div className="card relative overflow-hidden bg-gradient-to-br from-ink-900 to-ink-700 p-5 text-white ring-0">
-            <div className="text-xs font-semibold text-gold-300">{t('current')}</div>
-            <div className="flex items-end gap-4">
-              <div key={current?.id} className="num animate-pop text-7xl font-black leading-none text-gold-400 sm:text-8xl">{N(current?.queue_number)}</div>
-              <div className="pb-2 text-sm">
-                {current ? (<>
-                  <div className="font-bold">{current.patient_name}</div>
-                  <div className="text-white/60">{fmtTime12(current.appt_time, lang)} · {SL[current.status as Status]}{current.called_count > 1 ? ` · ×${N(current.called_count)}` : ''}</div>
-                </>) : <div className="text-white/50">{t('noCurrent')}</div>}
+        {/* current patient (number + code + name) · next three · live counters */}
+        {(() => {
+          const live = entries.filter((e) => e.status !== 'cancelled');
+          const kind = (e: Entry, k: string) => normalizeAr(e.procedure ?? '').includes(normalizeAr(k));
+          const doneN = live.filter((e) => e.status === 'done').length;
+          const waitingN = live.filter((e) => e.status === 'waiting' || e.status === 'booked').length;
+          const nextUp = entries.filter((e) => e.status === 'waiting').sort((a, b) => (a.queue_number ?? 1e9) - (b.queue_number ?? 1e9)).slice(0, 3);
+          const cards: [string, number, string, string][] = [
+            ['إجمالي المرضى', live.length, '👥', 'bg-blue-700'],
+            ['كشف', live.filter((e) => kind(e, 'كشف')).length, '🩺', 'bg-teal-600'],
+            ['استشارة', live.filter((e) => kind(e, 'استشارة')).length, '💬', 'bg-purple-600'],
+            ['في الانتظار', waitingN, '⏳', 'bg-amber-500'],
+            ['تم الكشف', doneN, '✔', 'bg-emerald-600'],
+            ['المتبقون', live.length - doneN, '➜', 'bg-orange-500'],
+          ];
+          const curDone = current?.status === 'done';
+          return (
+            <section className="grid gap-3 lg:grid-cols-[1.25fr_2fr]">
+              <div className="card relative overflow-hidden bg-gradient-to-br from-ink-900 to-ink-700 p-4 text-white ring-0">
+                <div className="flex items-center justify-between text-xs font-semibold text-gold-300">
+                  <span>{curDone ? (ar ? 'آخر مريض (تم الكشف)' : 'Last patient (seen)') : t('current')}</span>
+                  {current && <span className="text-white/60">{SL[current.status as Status]}{current.called_count > 1 ? ` · ×${N(current.called_count)}` : ''}</span>}
+                </div>
+                {current ? (
+                  <div className="mt-1 flex items-center gap-4">
+                    <div key={current.id} className={`num animate-pop font-black leading-none ${curDone ? 'text-white/40' : 'text-gold-400'} ${current.queue_number ? 'text-7xl sm:text-8xl' : 'text-4xl'}`}>
+                      {current.queue_number ? N(current.queue_number) : '✓'}</div>
+                    <div className="min-w-0">
+                      {current.patient_code && <div className="num inline-block rounded-lg bg-blue-600 px-2.5 py-0.5 text-2xl font-black tracking-wide" dir="ltr">{N(current.patient_code)}</div>}
+                      <div className="mt-1 truncate text-lg font-bold">{current.patient_name}</div>
+                      {current.procedure && <div className="text-xs text-white/60">{current.procedure}</div>}
+                    </div>
+                  </div>) : <div className="mt-3 text-white/50">{t('noCurrent')}</div>}
+                <div className="mt-3 border-t border-white/10 pt-2 text-xs">
+                  <span className="text-white/50">{ar ? 'التالي:' : 'Next:'} </span>
+                  {nextUp.length ? nextUp.map((e, i) => (
+                    <span key={e.id} className={`me-3 ${i === 0 ? 'font-bold text-gold-300' : 'text-white/80'}`}>
+                      <span className="num">{N(e.queue_number)}</span> {String(e.patient_name || '').split(' ').slice(0, 2).join(' ')}</span>))
+                    : <span className="text-white/40">{ar ? 'لا يوجد منتظرون' : 'nobody waiting'}</span>}
+                  {inRoom.length > 0 && <span className="ms-2 text-violet-200">· {t('inRoom')}: {inRoom.map((e) => N(e.queue_number ?? e.patient_code)).join('، ')}</span>}
+                  {s.avg_consult_min > 0 && <span className="ms-2 text-white/40">· {t('avg')} ≈ {N(Math.round(s.avg_consult_min))} {t('min')}</span>}
+                </div>
               </div>
-            </div>
-            {inRoom.length > 0 && <div className="mt-3 text-xs text-violet-200">{t('inRoom')}: {inRoom.map((e) => N(e.queue_number)).join('، ')}</div>}
-          </div>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 sm:gap-3">
-            {[[t('next'), N(data.next_number), 'text-ink-800'], [t('waiting'), N(s.waiting), 'text-sky-700'], [t('done'), N(s.done), 'text-emerald-700'],
-              [t('absent'), N(s.absent), 'text-rose-700'], [`${t('avg')} (${t('estimate')})`, `${N(Math.round(s.avg_consult_min))} ${t('min')}`, 'text-violet-700']]
-              .map(([k, v, c], i) => (
-                <div key={k} className={`card flex flex-col justify-center gap-1 p-2.5 sm:p-3 ${i === 4 ? 'col-span-4 flex-row items-center justify-between sm:col-span-1 sm:flex-col sm:items-start sm:justify-center' : ''}`}>
-                  <div className="text-[10px] font-semibold text-slate-500 sm:text-[11px]">{k}</div>
-                  <div className={`num text-2xl font-extrabold sm:text-3xl ${c}`}>{v}</div>
-                </div>))}
-          </div>
-        </section>
+              <div className="grid grid-cols-3 gap-2">
+                {cards.map(([label, n, icon, bg]) => (
+                  <div key={label} className={`${bg} flex flex-col justify-center rounded-xl px-3 py-2 text-white shadow-sm`}>
+                    <div className="flex items-center justify-between text-xs font-semibold opacity-90"><span>{label}</span><span>{icon}</span></div>
+                    <div className="num text-3xl font-black leading-tight">{N(n)}</div>
+                  </div>))}
+              </div>
+            </section>);
+        })()}
 
         {/* primary controls */}
         <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
-          <button className="btn-gold col-span-2 py-5 text-lg sm:col-span-3 lg:col-span-2" disabled={!canCall || !!busy}
+          <button className="btn-gold py-5 text-lg" disabled={!canCall || !!busy}
             onClick={() => act('call_next', null, {}, true)}>📢 {t('callNext')} <kbd className="hidden rounded bg-ink-950/10 px-1.5 text-[10px] lg:inline">F8</kbd></button>
-          <button className="btn-primary py-4" disabled={!current || !['called', 'in_room'].includes(current?.status) || !!busy} onClick={() => act('repeat')}>🔁 {t('repeat')}</button>
+          <button className="rounded-2xl bg-emerald-600 py-5 text-lg font-bold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-40" disabled={!canCall || !!busy}
+            onClick={doneAndNext} title={ar ? 'إنهاء الكشف الحالي ثم نداء التالي' : 'Finish current, call next'}>
+            ✅ {ar ? 'تم ونداء التالي' : 'Done + next'} <kbd className="hidden rounded bg-white/20 px-1.5 text-[10px] lg:inline">F9</kbd></button>
+          <button className="btn-primary py-4" disabled={!current || !['called', 'in_room'].includes(current?.status) || !!busy} onClick={() => act('repeat')}>🔁 {t('repeat')} <kbd className="hidden rounded bg-white/20 px-1 text-[10px] lg:inline">F10</kbd></button>
           <button className="btn-ghost py-4" disabled={!current || !['called', 'waiting'].includes(current?.status) || !!busy}
             onClick={() => act('skip', current?.id)}>⏭ {t('skip')}</button>
-          <button className="btn-ghost py-4" disabled={!current || current.status !== 'called' || !!busy} onClick={() => act('in_room', current?.id)}>🚪 {t('inRoom')}</button>
+          <button className="btn-ghost py-4" disabled={!current || current.status !== 'called' || !!busy} onClick={() => act('in_room', current?.id)}>🚪 {t('inRoom')} <kbd className="hidden rounded bg-slate-100 px-1 text-[10px] lg:inline">F6</kbd></button>
           <button className="btn-ghost py-4" disabled={(!inRoom.length && current?.status !== 'called') || !!busy} onClick={() => act('done')}>✅ {t('finish')}</button>
         </section>
         <section className="flex flex-wrap gap-2 text-sm">
@@ -268,6 +312,8 @@ export default function Reception({ clinic }: { clinic: string }) {
           </span>
         </section>
 
+        {/* one slim line: session + list source (wraps on small screens) */}
+        <div className="flex flex-wrap items-stretch gap-2">
         {/* clinic session: the list stays the same across midnight until the session is ended */}
         {sess !== undefined && (() => {
           const wd = (d: string) => new Intl.DateTimeFormat('ar-EG', { weekday: 'long', timeZone: 'UTC' }).format(new Date(d + 'T12:00:00Z'));
@@ -275,7 +321,7 @@ export default function Reception({ clinic }: { clinic: string }) {
           const sd = sess ? String(sess.date).slice(0, 10) : '';
           const other = sess && sess.clinic !== clinic;
           return (
-            <section className={`flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-xs ring-1 ${!sess ? 'bg-slate-50 ring-slate-200' : other ? 'bg-amber-50 ring-amber-200' : 'bg-emerald-50 ring-emerald-200'}`}>
+            <section className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-xl px-3 py-1.5 text-xs ring-1 ${!sess ? 'bg-slate-50 ring-slate-200' : other ? 'bg-amber-50 ring-amber-200' : 'bg-emerald-50 ring-emerald-200'}`}>
               {sess ? (<>
                 <span className="font-bold text-emerald-800">● {ar ? 'الجلسة المفتوحة:' : 'Open session:'}</span>
                 <span className="font-semibold">{sess.clinic_name ?? sess.clinic}</span>
@@ -307,12 +353,12 @@ export default function Reception({ clinic }: { clinic: string }) {
           const stale = own && (pcs.ownerAgo ?? 0) > 90;
           return (<>
           {own && (own.error || stale) && (
-            <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800 ring-1 ring-rose-200" dir="auto">
+            <div className="basis-full rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800 ring-1 ring-rose-200" dir="auto">
               ⚠ {own.label}: {own.error ? own.error : `لم يرسل القائمة منذ ${Math.round((pcs.ownerAgo ?? 0) / 60)} دقيقة`}
               {!own.online ? ' — الجهاز غير متصل' : ''}
             </div>)}
-          <section className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="font-semibold text-slate-500">{ar ? 'مصدر القائمة:' : 'List source:'}</span>
+          <section className="flex flex-wrap items-center gap-1.5 rounded-xl bg-white px-2 py-1 text-xs ring-1 ring-slate-200">
+            <span className="font-semibold text-slate-500">{ar ? 'المصدر:' : 'Source:'}</span>
             <button className={`rounded-full px-2.5 py-1 ring-1 ${!pcs.pinned ? 'bg-emerald-600 text-white ring-emerald-600' : 'bg-white text-slate-700 ring-slate-200'}`}
               disabled={!!busy || !pcs.pinned} title="الجهاز الأعلى أولوية المتصل يرسل القائمة"
               onClick={async () => {
@@ -347,34 +393,24 @@ export default function Reception({ clinic }: { clinic: string }) {
           </>);
         })()}
 
-        {/* live counters for this session's list */}
-        {entries.length > 0 && (() => {
-          const live = entries.filter((e) => e.status !== 'cancelled');
-          const kind = (e: Entry, k: string) => normalizeAr(e.procedure ?? '').includes(normalizeAr(k));
-          const done = live.filter((e) => e.status === 'done').length;
-          const waiting = live.filter((e) => e.status === 'waiting' || e.status === 'booked').length;
-          const cards: [string, number, string, string][] = [
-            ['إجمالي المرضى', live.length, '👥', 'bg-blue-700'],
-            ['كشف', live.filter((e) => kind(e, 'كشف')).length, '🩺', 'bg-teal-600'],
-            ['استشارة', live.filter((e) => kind(e, 'استشارة')).length, '💬', 'bg-purple-600'],
-            ['في الانتظار', waiting, '⏳', 'bg-amber-500'],
-            ['تم الكشف', done, '✔', 'bg-emerald-600'],
-            ['المتبقون', live.length - done, '➜', 'bg-orange-500'],
-          ];
-          return (
-            <section className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-              {cards.map(([label, n, icon, bg]) => (
-                <div key={label} className={`${bg} rounded-xl px-3 py-2 text-white shadow-sm`}>
-                  <div className="flex items-center justify-between text-xs font-semibold opacity-90"><span>{label}</span><span>{icon}</span></div>
-                  <div className="num text-2xl font-black leading-tight">{N(n)}</div>
-                </div>))}
-            </section>);
-        })()}
+        </div>
 
         {/* list */}
         <section className="card overflow-visible">
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
-            <input className="input max-w-sm" placeholder={t('search')} value={q} onChange={(e) => setQ(e.target.value)} />
+            <input ref={searchRef} className="input max-w-sm" value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder={ar ? 'بحث بالكود أو الاسم أو الرقم – Enter للنداء  ( / )' : t('search')}
+              onKeyDown={(ev) => {
+                if (ev.key === 'Escape') { setQ(''); (ev.target as HTMLInputElement).blur(); return; }
+                if (ev.key !== 'Enter') return;
+                const dq = toWesternDigits(q).replace(/\D/g, '');
+                const exact = entries.filter((e) => (dq && (String(e.patient_code ?? '') === dq || String(e.queue_number ?? '') === dq)));
+                const pool = (exact.length ? exact : shown).filter((e) => ['waiting', 'absent', 'postponed', 'booked', 'called'].includes(e.status));
+                if (pool.length !== 1) { flash(pool.length ? (ar ? `${pool.length} نتائج – اكتب الكود كاملاً` : 'several matches') : (ar ? 'لا يوجد مريض بهذا الكود' : 'no match'), 'err'); return; }
+                const e = pool[0];
+                if (e.status === 'called') act('repeat'); else act('call', e.id);
+                setQ('');
+              }} />
             <div className="flex flex-wrap gap-1 text-xs">
               {(['active', 'waiting', 'called', 'in_room', 'absent', 'postponed', 'done', 'cancelled', 'all'] as const).map((f) => {
                 const c = f === 'active' ? s.total - s.done - s.cancelled : f === 'all' ? s.total : s[f];
@@ -438,7 +474,11 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
   };
 
   return (
-    <div className={`flex items-center gap-3 px-3 py-2.5 ${isCurrent ? 'bg-amber-50/70' : ''} ${st === 'cancelled' || st === 'done' ? 'opacity-60' : ''}`}>
+    <div className={`flex items-center gap-3 border-s-4 px-3 py-2.5 ${
+      isCurrent && st !== 'done' ? 'border-emerald-500 bg-emerald-50' :
+      e.priority ? 'border-rose-500 bg-rose-50/40' :
+      st === 'waiting' ? 'border-sky-400' : st === 'called' ? 'border-amber-400 bg-amber-50/50' : st === 'in_room' ? 'border-violet-500 bg-violet-50/50' :
+      st === 'absent' || st === 'postponed' ? 'border-rose-300' : 'border-transparent'} ${st === 'cancelled' || st === 'done' ? 'bg-slate-50 opacity-55' : ''}`}>
       <div className={`num grid h-12 w-12 shrink-0 place-items-center rounded-xl text-xl font-extrabold ${isCurrent ? 'bg-gold-500 text-ink-950' : 'bg-slate-100 text-ink-800'}`}>{N(e.queue_number)}</div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -453,6 +493,8 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
           {e.procedure && <span>{e.procedure}</span>}
           {!e.patient_code && e.booking_id && <span className="num" dir="ltr">#{e.booking_id}</span>}
           {e.phone && <a className="num text-sky-700" dir="ltr" href={`https://wa.me/2${e.phone}`} target="_blank" rel="noreferrer">{e.phone}</a>}
+          {st === 'waiting' && (() => { const m = Math.max(0, Math.round((Date.now() - new Date(e.checked_in_at ?? e.created_at).getTime()) / 60000));
+            return m > 0 ? <span className={m >= 60 ? 'font-semibold text-rose-600' : 'text-slate-500'}>⏱ {ar ? 'ينتظر' : 'waiting'} {N(m)} د</span> : null; })()}
           {e.est_wait_min !== null && <span className="text-violet-700">≈ {N(e.est_wait_min)} د ({ar ? 'تقديري' : 'est.'})</span>}
           {e.called_at && <span>نداء {fmtTs12(e.called_at, lang)}</span>}
         </div>
