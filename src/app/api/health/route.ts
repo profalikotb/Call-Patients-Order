@@ -122,5 +122,13 @@ export async function GET(req: Request) {
       (report as any).tts_test = t;
     }
   } catch (e: any) { (report as any).tts_test = 'error: ' + String(e?.message || e); }
+  // online bookings feed (patient code → WhatsApp phone)
+  if (e.BOOKINGS_FEED_URL) {
+    try {
+      const { bookingsByCode } = await import('@/lib/server/bookings');
+      const { cairoDate } = await import('@/lib/time');
+      (report as any).bookings_feed = `ok – ${(await bookingsByCode(cairoDate())).size} coded bookings today`;
+    } catch (x: any) { (report as any).bookings_feed = 'error: ' + String(x?.message || x); }
+  } else (report as any).bookings_feed = 'not set (BOOKINGS_FEED_URL)';
   return json(report);
 }

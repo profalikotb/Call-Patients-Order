@@ -492,7 +492,10 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
           <span className="num">{fmtTime12(e.appt_time, lang)}</span>
           {e.procedure && <span>{e.procedure}</span>}
           {!e.patient_code && e.booking_id && <span className="num" dir="ltr">#{e.booking_id}</span>}
-          {e.phone && <a className="num text-sky-700" dir="ltr" href={`https://wa.me/2${e.phone}`} target="_blank" rel="noreferrer">{e.phone}</a>}
+          {e.booked_time && <span className="font-semibold text-indigo-700" title={ar ? 'موعد الحجز الإلكتروني' : 'online booking time'}>🕐 {e.booked_time}</span>}
+          {e.wa_phone
+            ? <a className="num font-semibold text-emerald-700" dir="ltr" href={`https://wa.me/${e.wa_phone}`} target="_blank" rel="noreferrer" title={ar ? 'واتساب من الحجز الإلكتروني' : 'WhatsApp from online booking'}>🟢 {e.wa_phone.replace(/^20/, '0')}</a>
+            : e.phone && <a className="num text-sky-700" dir="ltr" href={`https://wa.me/2${e.phone}`} target="_blank" rel="noreferrer">{e.phone}</a>}
           {st === 'waiting' && (() => { const m = Math.max(0, Math.round((Date.now() - new Date(e.checked_in_at ?? e.created_at).getTime()) / 60000));
             return m > 0 ? <span className={m >= 60 ? 'font-semibold text-rose-600' : 'text-slate-500'}>⏱ {ar ? 'ينتظر' : 'waiting'} {N(m)} د</span> : null; })()}
           {e.est_wait_min !== null && <span className="text-violet-700">≈ {N(e.est_wait_min)} د ({ar ? 'تقديري' : 'est.'})</span>}

@@ -4,6 +4,7 @@ import { getClinic, getClinicSettings } from '@/lib/server/settings';
 import { providersAvailable } from '@/lib/server/tts';
 import { sheetSource } from '@/lib/server/sheets';
 import { sessionDate } from '@/lib/server/session';
+import { bookingsByCode } from '@/lib/server/bookings';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ export const GET = handle(async (req) => {
   const clinic = clinicParam(new URL(req.url).searchParams.get('clinic'));
   await requireStaff({ clinic });
   const today = await sessionDate(clinic);
-  const [c, settings, entries, day, display, last] = await Promise.all([
+  const [c, settings, entries, day, display, last, books] = await Promise.all([
     getClinic(clinic),
     getClinicSettings(clinic),
     db().from('queue_entries').select('*').eq('clinic_id', clinic).eq('service_date', today),
@@ -21,6 +22,7 @@ export const GET = handle(async (req) => {
     db().from('display_state').select('*').eq('clinic_id', clinic).maybeSingle(),
     db().from('audit_log').select('id,action,actor,created_at,entry_id').eq('clinic_id', clinic).eq('service_date', today)
       .eq('undone', false).neq('action', 'undo').order('id', { ascending: false }).limit(1),
+    bookingsByCode(today),
   ]);
   if (!c) return json({ ok: false, error: 'unknown_clinic' }, 404);
   if (entries.error) throw entries.error;
@@ -38,6 +40,9 @@ export const GET = handle(async (req) => {
   const busy = rows.some((r) => r.status === 'in_room' || r.status === 'called') ? 1 : 0;
   const pos = new Map(waiting.map((r, i) => [r.id, i]));
   const list = rows.map((r) => ({ ...r, position: pos.get(r.id) ?? null,
+    // online booking with the SAME patient code → WhatsApp number + booked time (Oracle data is not changed)
+    wa_phone: (r.patient_code && books.get(String(r.patient_code))?.phone) || null,
+    booked_time: (r.patient_code && books.get(String(r.patient_code))?.time) || null,
     est_wait_min: pos.has(r.id) ? Math.round((pos.get(r.id)! + busy) * avg) : null }))
     .sort((a, b) => (ORDER[a.status] - ORDER[b.status]) ||
       (a.status === 'waiting' ? (a.position ?? 1e9) - (b.position ?? 1e9) : 0) ||
