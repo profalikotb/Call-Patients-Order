@@ -366,7 +366,7 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
           <button className="ms-3 rounded-lg bg-ink-950 px-3 py-1 text-white" onClick={() => activate(true)}>نقل الصوت لهذه الشاشة</button>
         </div>)}
 
-      {unlocked && unlockedRef.current && !speechReady && !st?.playback?.server_tts && (
+      {unlocked && unlockedRef.current && !speechReady && (
         <button onClick={primeSpeech} style={{ cursor: 'pointer' }}
           className="absolute inset-x-0 bottom-[9vh] mx-auto w-fit max-w-[90vw] rounded-2xl bg-amber-400 px-8 py-4 text-[1.6vw] font-black text-ink-950 shadow-2xl">
           🔊 اضغط هنا مرة واحدة لتشغيل صوت النداء
