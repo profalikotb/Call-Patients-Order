@@ -396,7 +396,7 @@ export default function Reception({ clinic }: { clinic: string }) {
         </div>
 
         {/* list + (left side) today's online bookings, read-only guide */}
-        <div className={`grid items-start gap-3 ${data.bookings?.length ? 'xl:grid-cols-[1fr_380px]' : ''}`}>
+        <div className={`grid items-start gap-3 ${data.bookings?.length || BOOKING_PAGES[clinic] ? 'xl:grid-cols-[1fr_420px]' : ''}`}>
         <section className="card min-w-0 overflow-visible">
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
             <input ref={searchRef} className="input max-w-sm" value={q} onChange={(e) => setQ(e.target.value)}
@@ -435,7 +435,8 @@ export default function Reception({ clinic }: { clinic: string }) {
             ))}
           </div>
         </section>
-          {data.bookings?.length > 0 && <BookingsGuide list={data.bookings} ar={ar} />}
+          {data.bookings?.length > 0 ? <BookingsGuide list={data.bookings} ar={ar} />
+            : BOOKING_PAGES[clinic] ? <BookingPageFrame url={BOOKING_PAGES[clinic]} ar={ar} /> : null}
         </div>
       </main>
 
@@ -587,6 +588,29 @@ function BookingsGuide({ list, ar }: { list: any[]; ar: boolean }) {
             })}
           </tbody>
         </table>)}
+    </aside>
+  );
+}
+
+// Your existing online-booking pages, shown read-only beside the list (no extra script needed)
+const BOOKING_PAGES: Record<string, string> = {
+  heliopolis: 'https://script.google.com/macros/s/AKfycbyQJc5z3lW2PHEnX-3TMMQTYJQ2_2JM5vLaePhZfNTIJz8CpBKaoph84q0R4rtyWtc/exec',  // Sat / Sun / Tue
+  toukh: 'https://script.google.com/macros/s/AKfycbyiLRlx9aNNEcOxV3PtBz-JqRS23g-HC9hjN1Zu034-EAiqC6cW9MkSdFI3vjwpZHg/exec',       // Friday
+};
+
+function BookingPageFrame({ url, ar }: { url: string; ar: boolean }) {
+  const [open, setOpen] = useState(true);
+  const [n, setN] = useState(0);                                   // reload counter
+  return (
+    <aside className="card sticky top-20 overflow-hidden">
+      <div className="flex items-center justify-between bg-[#0b3f7a] px-3 py-2 text-sm font-bold text-white">
+        <button onClick={() => setOpen(!open)}>📅 {ar ? 'الحجز الإلكتروني' : 'Online bookings'} {open ? '▾' : '▸'}</button>
+        <span className="flex gap-2 text-xs font-normal">
+          <button onClick={() => setN(n + 1)} title={ar ? 'تحديث' : 'reload'}>⟳</button>
+          <a href={url} target="_blank" rel="noreferrer" className="underline">{ar ? 'فتح في نافذة' : 'open'}</a>
+        </span>
+      </div>
+      {open && <iframe key={n} src={url} title="bookings" className="h-[calc(100dvh-9rem)] w-full border-0 bg-white" referrerPolicy="no-referrer" />}
     </aside>
   );
 }
