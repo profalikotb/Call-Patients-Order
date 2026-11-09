@@ -307,6 +307,8 @@ export default function Reception({ clinic }: { clinic: string }) {
             ↶ {t('undo')}{data.last_action ? <span className="text-xs text-slate-400">({ACTION_AR[data.last_action.action]})</span> : null}</button>
           <button className="btn-ghost" onClick={() => setDialog({ type: 'walkin' })}>＋ {t('walkin')}</button>
           <Link className="btn-ghost" href={`/summary/${clinic}`}>📋 {t('summary')}</Link>
+          {BOOKING_PAGES[clinic] && <button className="btn-ghost" onClick={() => openBookingPage(BOOKING_PAGES[clinic])}
+            title={ar ? 'يفتح جدول الحجز في نافذة على يسار الشاشة' : 'opens the booking page on the left'}>📅 {ar ? 'جدول الحجز' : 'Bookings'}</button>}
           <span className="ms-auto self-center text-xs text-slate-400">
             {data.policy === 'time' ? 'ترتيب حسب الموعد' : data.policy === 'checkin' ? 'ترتيب حسب الوصول' : 'أرقام يدوية'}
           </span>
@@ -396,7 +398,7 @@ export default function Reception({ clinic }: { clinic: string }) {
         </div>
 
         {/* list + (left side) today's online bookings, read-only guide */}
-        <div className={`grid items-start gap-3 ${data.bookings?.length || BOOKING_PAGES[clinic] ? 'xl:grid-cols-[1fr_420px]' : ''}`}>
+        <div className={`grid items-start gap-3 ${data.bookings?.length ? 'xl:grid-cols-[1fr_380px]' : ''}`}>
         <section className="card min-w-0 overflow-visible">
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
             <input ref={searchRef} className="input max-w-sm" value={q} onChange={(e) => setQ(e.target.value)}
@@ -435,8 +437,7 @@ export default function Reception({ clinic }: { clinic: string }) {
             ))}
           </div>
         </section>
-          {data.bookings?.length > 0 ? <BookingsGuide list={data.bookings} ar={ar} />
-            : BOOKING_PAGES[clinic] ? <BookingPageFrame url={BOOKING_PAGES[clinic]} ar={ar} /> : null}
+          {data.bookings?.length > 0 && <BookingsGuide list={data.bookings} ar={ar} />}
         </div>
       </main>
 
@@ -598,19 +599,9 @@ const BOOKING_PAGES: Record<string, string> = {
   toukh: 'https://script.google.com/macros/s/AKfycbyiLRlx9aNNEcOxV3PtBz-JqRS23g-HC9hjN1Zu034-EAiqC6cW9MkSdFI3vjwpZHg/exec',       // Friday
 };
 
-function BookingPageFrame({ url, ar }: { url: string; ar: boolean }) {
-  const [open, setOpen] = useState(true);
-  const [n, setN] = useState(0);                                   // reload counter
-  return (
-    <aside className="card sticky top-20 overflow-hidden">
-      <div className="flex items-center justify-between bg-[#0b3f7a] px-3 py-2 text-sm font-bold text-white">
-        <button onClick={() => setOpen(!open)}>📅 {ar ? 'الحجز الإلكتروني' : 'Online bookings'} {open ? '▾' : '▸'}</button>
-        <span className="flex gap-2 text-xs font-normal">
-          <button onClick={() => setN(n + 1)} title={ar ? 'تحديث' : 'reload'}>⟳</button>
-          <a href={url} target="_blank" rel="noreferrer" className="underline">{ar ? 'فتح في نافذة' : 'open'}</a>
-        </span>
-      </div>
-      {open && <iframe key={n} src={url} title="bookings" className="h-[calc(100dvh-9rem)] w-full border-0 bg-white" referrerPolicy="no-referrer" />}
-    </aside>
-  );
+// opens the booking page as a narrow window docked on the LEFT of the screen (Google does not allow embedding it)
+function openBookingPage(url: string) {
+  const w = Math.min(560, Math.round(screen.availWidth * 0.33)), h = screen.availHeight;
+  const win = window.open(url, 'pq_bookings', `popup=yes,left=0,top=0,width=${w},height=${h}`);
+  win?.focus();
 }
