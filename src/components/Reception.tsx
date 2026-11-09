@@ -44,6 +44,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   const [q, setQ] = useState('');
   const [menu, setMenu] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | { type: 'walkin' } | { type: 'number'; entry: Entry } | { type: 'confirm'; text: string; run: () => void }>(null);
+  const [wa, setWa] = useState<null | { phone: string; name: string }>(null);      // quick WhatsApp box
   // push mode: clinic PCs that send the list, and which PC THIS browser belongs to
   const [pcs, setPcs] = useState<{ owner: string | null; pinned: boolean; ownerAgo: number | null; sources: any[] } | null>(null);
   const [thisPc, setThisPc] = useState<string>('');
@@ -309,6 +310,7 @@ export default function Reception({ clinic }: { clinic: string }) {
           <Link className="btn-ghost" href={`/summary/${clinic}`}>📋 {t('summary')}</Link>
           {BOOKING_PAGES[clinic] && <button className="btn-ghost" onClick={() => openBookingPage(BOOKING_PAGES[clinic])}
             title={ar ? 'يفتح جدول الحجز في نافذة على يسار الشاشة' : 'opens the booking page on the left'}>📅 {ar ? 'جدول الحجز' : 'Bookings'}</button>}
+          <button className="btn-ghost" onClick={() => setWa({ phone: '', name: '' })} title={ar ? 'انسخ الرقم من جدول الحجز والصقه هنا' : 'paste a number'}>💬 {ar ? 'واتساب' : 'WhatsApp'}</button>
           <span className="ms-auto self-center text-xs text-slate-400">
             {data.policy === 'time' ? 'ترتيب حسب الموعد' : data.policy === 'checkin' ? 'ترتيب حسب الوصول' : 'أرقام يدوية'}
           </span>
@@ -448,6 +450,7 @@ export default function Reception({ clinic }: { clinic: string }) {
         </div>)}
 
       {dialog && <Dialog dialog={dialog} close={() => setDialog(null)} act={act} policy={data.policy} />}
+      {wa && <WhatsAppBox init={wa} clinicName={data.clinic.name_ar} room={data.room_label} close={() => setWa(null)} />}
     </div>
   );
 }
@@ -604,4 +607,52 @@ function openBookingPage(url: string) {
   const w = Math.min(560, Math.round(screen.availWidth * 0.33)), h = screen.availHeight;
   const win = window.open(url, 'pq_bookings', `popup=yes,left=0,top=0,width=${w},height=${h}`);
   win?.focus();
+}
+
+// Quick WhatsApp: paste/type any number (01…, 201…, +20 1…) → choose a ready message → opens WhatsApp
+const WA_TEMPLATES: [string, (n: string, c: string, r: string) => string][] = [
+  ['تذكير بالموعد', (n, c) => `السلام عليكم ${n}\nنذكّركم بموعدكم اليوم في ${c} – عيادة أ.د. على قطب.\nبرجاء الحضور قبل الموعد بـ ١٥ دقيقة.`],
+  ['اقترب دورك', (n, c, r) => `السلام عليكم ${n}\nاقترب دوركم الآن في ${c}، برجاء التواجد بالقرب من ${r}.`],
+  ['دورك الآن', (n, c, r) => `السلام عليكم ${n}\nدوركم الآن – برجاء التوجه إلى ${r} فوراً.`],
+  ['تأخير الطبيب', (n, c) => `السلام عليكم ${n}\nنعتذر، سيتأخر بدء الكشف اليوم في ${c} قليلاً. سنبلغكم عند اقتراب دوركم.`],
+  ['تأكيد الحجز', (n, c) => `السلام عليكم ${n}\nتم تأكيد حجزكم في ${c} – عيادة أ.د. على قطب.`],
+  ['رسالة فارغة', () => ''],
+];
+function waNumber(raw: string): string {
+  let d = toWesternDigits(raw).replace(/\D/g, '');
+  if (/^01\d{9}$/.test(d)) d = '2' + d;
+  if (/^1\d{9}$/.test(d)) d = '20' + d;
+  return /^201\d{9}$/.test(d) ? d : '';
+}
+function WhatsAppBox({ init, clinicName, room, close }: { init: { phone: string; name: string }; clinicName: string; room: string; close: () => void }) {
+  const [phone, setPhone] = useState(init.phone);
+  const [name, setName] = useState(init.name);
+  const [ti, setTi] = useState(0);
+  const [text, setText] = useState('');
+  useEffect(() => { setText(WA_TEMPLATES[ti][1](name ? `أ/ ${name}` : '', clinicName, room)); }, [ti, name, clinicName, room]);
+  useEffect(() => {                       // paste from clipboard automatically if it holds a phone number
+    if (init.phone) return;
+    navigator.clipboard?.readText?.().then((t) => { if (waNumber(t)) setPhone(t.trim()); }).catch(() => {});
+  }, [init.phone]);
+  const num = waNumber(phone);
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink-950/50 p-3" onClick={close}>
+      <div className="card w-full max-w-md space-y-3 p-5" onClick={(e) => e.stopPropagation()} dir="rtl">
+        <h3 className="font-bold">💬 إرسال واتساب</h3>
+        <input className="input num" dir="ltr" autoFocus placeholder="01xxxxxxxxx  أو  201xxxxxxxxx" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <div className={`text-xs ${num ? 'text-emerald-700' : 'text-rose-600'}`}>{num ? `✓ ${num}` : 'الصق الرقم من جدول الحجز (Ctrl+V)'}</div>
+        <input className="input" placeholder="اسم المريض (اختياري)" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="flex flex-wrap gap-1.5">
+          {WA_TEMPLATES.map(([l], i) => (
+            <button key={l} onClick={() => setTi(i)} className={`chip px-3 py-1 ${ti === i ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}>{l}</button>))}
+        </div>
+        <textarea className="input min-h-[110px]" value={text} onChange={(e) => setText(e.target.value)} />
+        <div className="flex gap-2">
+          <a className={`btn-primary flex-1 text-center ${num ? '' : 'pointer-events-none opacity-40'}`} target="_blank" rel="noreferrer"
+            href={num ? `https://wa.me/${num}${text ? `?text=${encodeURIComponent(text)}` : ''}` : undefined} onClick={() => setTimeout(close, 300)}>فتح واتساب</a>
+          <button className="btn-ghost" onClick={close}>إغلاق</button>
+        </div>
+      </div>
+    </div>
+  );
 }
