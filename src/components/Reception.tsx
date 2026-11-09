@@ -604,7 +604,7 @@ const BOOKING_PAGES: Record<string, string> = {
 
 // opens the booking page as a narrow window docked on the LEFT of the screen (Google does not allow embedding it)
 function openBookingPage(url: string) {
-  const w = Math.min(560, Math.round(screen.availWidth * 0.33)), h = screen.availHeight;
+  const w = Math.min(900, Math.round(screen.availWidth * 0.5)), h = screen.availHeight;   // wide enough for the phone column
   const win = window.open(url, 'pq_bookings', `popup=yes,left=0,top=0,width=${w},height=${h}`);
   win?.focus();
 }
