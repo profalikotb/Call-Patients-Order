@@ -25,6 +25,8 @@ describe('persistent clinic sessions', () => {
     await q(`insert into audit_log (clinic_id, service_date, action, actor) values ('heliopolis', $1, 'call_next', 't')`, [s.date]);
     expect((await cur()).id).toBe(s.id);                            // call 0 min ago → still in session
     await q(`update audit_log set created_at = now() - interval '5 hours'`);
+    const hour = Number((await q(`select extract(hour from now() at time zone 'Africa/Cairo')::int h`))[0].h);
+    if (hour < 8) { expect((await cur()).id).toBe(s.id); return; }   // before 08:00 Cairo: never auto-closed
     const n = await cur();
     expect(n.id).not.toBe(s.id); expect(n.date).toBe(await today());
     expect((await q(`select ended_by from clinic_sessions where id = $1`, [s.id]))[0].ended_by).toMatch(/auto/);

@@ -27,7 +27,7 @@ export async function startDb(): Promise<pg.Pool> {
     if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
     if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
   end $$;`);
-  for (const f of ['001_queue.sql', '002_sheet_call_numbers.sql', '003_sheet_seen.sql', '004_sheet_mirror.sql', '005_push_lease.sql', '006_push_sources.sql', '007_push_choice.sql', '008_push_hosts.sql', '009_sessions.sql'])
+  for (const f of ['001_queue.sql', '002_sheet_call_numbers.sql', '003_sheet_seen.sql', '004_sheet_mirror.sql', '005_push_lease.sql', '006_push_sources.sql', '007_push_choice.sql', '008_push_hosts.sql', '009_sessions.sql', '010_session_morning.sql'])
     await pool.query(readFileSync(join(__dirname, '..', 'supabase', 'migrations', f), 'utf8'));
   return pool;
 }
