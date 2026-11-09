@@ -417,10 +417,10 @@ export default function Reception({ clinic }: { clinic: string }) {
                 return (
                   <button key={f} onClick={() => setFilter(f as any)}
                     className={`chip px-3 py-1.5 ${filter === f ? 'bg-ink-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                    {f === 'active' ? (ar ? 'الحاليون' : 'Active') : f === 'all' ? t('all') : SL[f as Status]} <span className="num opacity-70">{N(c)}</span>
+                    {f === 'active' ? (ar ? 'الحاليون' : 'Active') : f === 'all' ? t('all') : SL[f as Status]}{data.role === 'admin' && <span className="num opacity-70"> {N(c)}</span>}
                   </button>);
               })}
-              {data.policy === 'checkin' && s.booked > 0 && <span className="chip bg-slate-100 text-slate-500">{SL.booked}: {N(s.booked)}</span>}
+              {data.role === 'admin' && data.policy === 'checkin' && s.booked > 0 && <span className="chip bg-slate-100 text-slate-500">{SL.booked}: {N(s.booked)}</span>}
             </div>
           </div>
 
