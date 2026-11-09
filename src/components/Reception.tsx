@@ -673,28 +673,42 @@ function WhatsAppBox({ init, clinicName, room, close }: { init: { phone: string;
 // Doctor → assistant messages: loud banner + repeating chime until «تم ✓»
 function DoctorMessages({ clinic, msgs, reload }: { clinic: string; msgs: any[]; reload: () => void }) {
   const ctx = useRef<AudioContext | null>(null);
+  const quietUntil = useRef(0);
   useEffect(() => {                                   // the browser allows sound after the first click on the page
     const unlock = () => { try { ctx.current ??= new AudioContext(); ctx.current.resume(); } catch {} };
     window.addEventListener('pointerdown', unlock); return () => window.removeEventListener('pointerdown', unlock);
   }, []);
   useEffect(() => {
     if (!msgs.length) return;
-    const ding = () => {
-      const c = ctx.current; if (!c) return;
-      [880, 660, 880].forEach((f, i) => {
-        const o = c.createOscillator(), g = c.createGain(), t = c.currentTime + i * 0.22;
-        o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2); o.connect(g).connect(c.destination); o.start(t); o.stop(t + 0.22);
-      });
+    // classic telephone ring: two «brr» bursts (440 + 480 Hz, warbling 20×/s), repeated every 2 s until «تم ✓»
+    const burst = (c: AudioContext, t: number) => {
+      const g = c.createGain(); g.gain.value = 0; g.connect(c.destination);
+      const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 20; lg.gain.value = 0.35;
+      lfo.connect(lg).connect(g.gain);
+      [440, 480].forEach((f) => { const o = c.createOscillator(); o.frequency.value = f; o.connect(g); o.start(t); o.stop(t + 0.4); });
+      lfo.start(t); lfo.stop(t + 0.4);
     };
-    ding(); const id = setInterval(ding, 4000);
+    const ring = () => {
+      const c = ctx.current; if (!c || Date.now() < quietUntil.current) return;   // quiet while a voice note plays
+      burst(c, c.currentTime); burst(c, c.currentTime + 0.6);
+    };
+    ring(); const id = setInterval(ring, 2000);
+    const title = document.title; let on = false;
+    const blink = setInterval(() => { on = !on; document.title = on ? '🔔 رسالة من الطبيب' : title; }, 800);
     try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('رسالة من الطبيب', { body: msgs[0].body }); } catch {}
-    return () => clearInterval(id);
+    return () => { clearInterval(id); clearInterval(blink); document.title = title; };
   }, [msgs.length, msgs]);
   useEffect(() => { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} }, []);
   // voice notes play by themselves once (after the chime); ▶ plays again
   const played = useRef<Set<number>>(new Set());
-  const play = (m: any) => { try { new Audio(`/api/staff-msg/voice?clinic=${clinic}&id=${m.id}`).play().catch(() => {}); } catch {} };
+  const play = (m: any) => {
+    try {
+      const a = new Audio(`/api/staff-msg/voice?clinic=${clinic}&id=${m.id}`);
+      quietUntil.current = Date.now() + 65_000;                       // ring pauses while the doctor's voice plays
+      a.onended = a.onerror = () => { quietUntil.current = 0; };
+      a.play().catch(() => { quietUntil.current = 0; });
+    } catch {}
+  };
   useEffect(() => {
     for (const m of msgs) if (m.audio_path && !played.current.has(m.id)) { played.current.add(m.id); setTimeout(() => play(m), 900); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -706,7 +720,7 @@ function DoctorMessages({ clinic, msgs, reload }: { clinic: string; msgs: any[];
   };
   const time = (t: string) => new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' }).format(new Date(t));
   return (
-    <div className="fixed inset-x-0 top-0 z-[60] space-y-1 p-2">
+    <div className="fixed inset-0 z-[60] space-y-1 bg-rose-900/40 p-2 backdrop-blur-[1px]">
       {msgs.slice(0, 3).map((m) => (
         <div key={m.id} className="mx-auto flex max-w-3xl animate-pulse items-center gap-3 rounded-2xl bg-rose-600 px-5 py-4 text-white shadow-2xl ring-4 ring-rose-300">
           <span className="text-3xl">🔔</span>
