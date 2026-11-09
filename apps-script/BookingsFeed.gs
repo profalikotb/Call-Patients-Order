@@ -46,8 +46,7 @@ function doGet(e) {
   for (let i = 1; i < v.length; i++) {
     const r = v[i];
     if (isoDate_(r[c.date]) !== date) continue;
-    const code = String(r[c.code]).trim();
-    if (!/^\d+$/.test(code)) continue;                      // only real patient codes (skip NewLink, الهوارى …)
+    const code = String(r[c.code]).trim();               // a real code (662619) or a label (NewLink, الهوارى …)
     rows.push({
       code: code,
       phone: waPhone_(r[c.phone]),                          // 2010xxxxxxxx (WhatsApp format) or ''

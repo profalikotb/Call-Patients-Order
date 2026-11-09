@@ -217,7 +217,7 @@ export default function Reception({ clinic }: { clinic: string }) {
         )}
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-4 px-3 pt-4 sm:px-5">
+      <main className="mx-auto max-w-[1600px] space-y-4 px-3 pt-4 sm:px-5">
         {/* current patient (number + code + name) · next three · live counters */}
         {(() => {
           const live = entries.filter((e) => e.status !== 'cancelled');
@@ -395,8 +395,9 @@ export default function Reception({ clinic }: { clinic: string }) {
 
         </div>
 
-        {/* list */}
-        <section className="card overflow-visible">
+        {/* list + (left side) today's online bookings, read-only guide */}
+        <div className={`grid items-start gap-3 ${data.bookings?.length ? 'xl:grid-cols-[1fr_380px]' : ''}`}>
+        <section className="card min-w-0 overflow-visible">
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
             <input ref={searchRef} className="input max-w-sm" value={q} onChange={(e) => setQ(e.target.value)}
               placeholder={ar ? 'بحث بالكود أو الاسم أو الرقم – Enter للنداء  ( / )' : t('search')}
@@ -434,6 +435,8 @@ export default function Reception({ clinic }: { clinic: string }) {
             ))}
           </div>
         </section>
+          {data.bookings?.length > 0 && <BookingsGuide list={data.bookings} ar={ar} />}
+        </div>
       </main>
 
       {toast && (
@@ -546,5 +549,44 @@ function Dialog({ dialog, close, act, policy }: any) {
           </form>)}
       </div>
     </div>
+  );
+}
+
+// Read-only guide: today's online bookings (AllEvents2025). ✓ = same patient code is already in Oracle's list.
+function BookingsGuide({ list, ar }: { list: any[]; ar: boolean }) {
+  const [open, setOpen] = useState(true);
+  const notIn = list.filter((b) => !b.in_list).length;
+  return (
+    <aside className="card sticky top-20 overflow-hidden xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between bg-[#0b3f7a] px-3 py-2 text-sm font-bold text-white">
+        <span>📅 {ar ? 'الحجز الإلكتروني' : 'Online bookings'} <span className="num font-normal opacity-80">({list.length})</span></span>
+        <span className="text-xs font-normal opacity-80">{notIn ? `${notIn} ${ar ? 'غير مسجل في أوراكل' : 'not in Oracle'}` : ''} {open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <table className="w-full text-xs">
+          <thead className="bg-slate-100 text-slate-600">
+            <tr><th className="px-2 py-1.5 text-start">{ar ? 'الوقت' : 'Time'}</th><th className="px-2 py-1.5 text-start">{ar ? 'الاسم' : 'Name'}</th>
+              <th className="px-2 py-1.5 text-start">{ar ? 'التليفون' : 'Phone'}</th><th className="px-1 py-1.5"></th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {list.map((b, i) => {
+              const kashf = /كشف/.test(b.procedure);
+              return (
+                <tr key={i} className={b.in_list ? 'bg-white' : kashf ? 'bg-[#5b3f37]/10' : 'bg-amber-50'}>
+                  <td className="whitespace-nowrap px-2 py-1.5 font-semibold" dir="ltr">{String(b.time).replace(/:00(?=\s*[ap]m)/i, '').toUpperCase()}</td>
+                  <td className="px-2 py-1.5">
+                    <div className="font-semibold leading-tight">{b.name}</div>
+                    <div className="text-[10px] text-slate-500">{b.procedure}{/^\d+$/.test(b.code) ? <span className="num" dir="ltr"> · {b.code}</span> : b.code ? ` · ${b.code}` : ''}</div>
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-1.5">{b.phone
+                    ? <a className="num text-emerald-700" dir="ltr" href={`https://wa.me/${b.phone}`} target="_blank" rel="noreferrer">{b.phone.replace(/^20/, '0')}</a>
+                    : <span className="text-slate-300">—</span>}</td>
+                  <td className="px-1 text-center" title={b.in_list ? (ar ? 'موجود في قائمة أوراكل' : 'in Oracle list') : (ar ? 'غير موجود في قائمة أوراكل' : 'not in Oracle list')}>
+                    {b.in_list ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">●</span>}</td>
+                </tr>);
+            })}
+          </tbody>
+        </table>)}
+    </aside>
   );
 }
