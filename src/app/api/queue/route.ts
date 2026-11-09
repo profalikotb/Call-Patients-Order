@@ -12,7 +12,7 @@ const ORDER: Record<string, number> = { in_room: 0, called: 1, waiting: 2, booke
 
 export const GET = handle(async (req) => {
   const clinic = clinicParam(new URL(req.url).searchParams.get('clinic'));
-  await requireStaff({ clinic });
+  const me = await requireStaff({ clinic });
   const today = await sessionDate(clinic);
   const [c, settings, entries, day, display, last, books] = await Promise.all([
     getClinic(clinic),
@@ -51,7 +51,7 @@ export const GET = handle(async (req) => {
   const count = (s: string) => rows.filter((r) => r.status === s).length;
   const d = display.data;
   return json({
-    ok: true, today, clinic: c, policy: settings.policy, room_label: settings.room_label,
+    ok: true, today, clinic: c, role: me.role, policy: settings.policy, room_label: settings.room_label,
     voice: { includeName: settings.voice.includeName, provider: settings.voice.provider },
     day: day.data ?? { version: 0, paused: false, current_entry_id: null },
     entries: list,

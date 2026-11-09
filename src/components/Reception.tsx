@@ -235,7 +235,7 @@ export default function Reception({ clinic }: { clinic: string }) {
           ];
           const curDone = current?.status === 'done';
           return (
-            <section className="grid gap-3 lg:grid-cols-[1.25fr_2fr]">
+            <section className={`grid gap-3 ${data.role === 'admin' ? 'lg:grid-cols-[1.25fr_2fr]' : ''}`}>
               <div className="card relative overflow-hidden bg-gradient-to-br from-ink-900 to-ink-700 p-4 text-white ring-0">
                 <div className="flex items-center justify-between text-xs font-semibold text-gold-300">
                   <span>{curDone ? (ar ? 'آخر مريض (تم الكشف)' : 'Last patient (seen)') : t('current')}</span>
@@ -261,13 +261,13 @@ export default function Reception({ clinic }: { clinic: string }) {
                   {s.avg_consult_min > 0 && <span className="ms-2 text-white/40">· {t('avg')} ≈ {N(Math.round(s.avg_consult_min))} {t('min')}</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              {data.role === 'admin' && <div className="grid grid-cols-3 gap-2">   {/* counters: doctor/admin only, hidden from reception staff */}
                 {cards.map(([label, n, icon, bg]) => (
                   <div key={label} className={`${bg} flex flex-col justify-center rounded-xl px-3 py-2 text-white shadow-sm`}>
                     <div className="flex items-center justify-between text-xs font-semibold opacity-90"><span>{label}</span><span>{icon}</span></div>
                     <div className="num text-3xl font-black leading-tight">{N(n)}</div>
                   </div>))}
-              </div>
+              </div>}
             </section>);
         })()}
 
