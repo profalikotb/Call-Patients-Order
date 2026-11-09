@@ -60,9 +60,10 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     await new Promise((r) => setTimeout(r, 1500));
   }, []);
 
+  const serverDownUntil = useRef(0);
   const fetchBuffer = useCallback(async (url: string): Promise<AudioBuffer> => {
     const hit = prefetched.current.get(url); if (hit) return hit;
-    const r = await fetch(url, { cache: 'force-cache' });
+    const r = await fetch(url, { cache: 'force-cache', signal: AbortSignal.timeout(12000) });
     if (!r.ok) throw new Error(`tts ${r.status}`);
     const buf = await ctx.current!.decodeAudioData(await r.arrayBuffer());
     prefetched.current.set(url, buf);
@@ -95,6 +96,8 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     u.pitch = Math.min(1.4, Math.max(0.6, 1 + (pb.pitch ?? -2) / 50));
     u.volume = Math.min(1, pb.volume ?? 1);
     u.onend = () => res(); u.onerror = () => res();
+    // Edge/Chrome: a stuck or paused speech queue makes every later call silent → reset it first
+    try { ss.cancel(); ss.resume(); } catch {}
     ss.speak(u); setTimeout(res, 12000);
   });
 
@@ -115,8 +118,10 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
         if (my !== jobId.current) return;
         const variant: Variant = i === 0 ? a.kind : 'repeat';
         let ok = false;
-        if (pb.server_tts) {
-          try { await playBuffer(await fetchBuffer(urlFor(a, variant))); ok = true; setAudioNote(''); } catch { /* fall through */ }
+        // server voice (ElevenLabs/Azure); after a failure skip it for 10 min so the browser voice speaks at once
+        if (pb.server_tts && Date.now() > serverDownUntil.current) {
+          try { await playBuffer(await fetchBuffer(urlFor(a, variant))); ok = true; setAudioNote(''); }
+          catch (err) { serverDownUntil.current = Date.now() + 600_000; console.warn('[queue] server voice failed, using browser voice', err); }
         }
         if (!ok) {
           const tpl = (pb.templates?.[variant] ?? pb.templates?.call ?? 'رقم {n}') as string;

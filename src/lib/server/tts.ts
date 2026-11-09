@@ -60,7 +60,11 @@ async function eleven(text: string, v: VoiceSettings): Promise<Buffer> {
       voice_settings: { stability: 0.6, similarity_boost: 0.8, speed } }),
     signal: AbortSignal.timeout(15000),
   });
-  if (!r.ok) throw new Error(`elevenlabs_${r.status}`);
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    let why = ''; try { const j = JSON.parse(body); why = j?.detail?.status || j?.detail?.message || j?.detail || ''; } catch { why = body.slice(0, 120); }
+    throw new Error(`elevenlabs_${r.status}${why ? ': ' + (typeof why === 'string' ? why : JSON.stringify(why)) : ''}`);
+  }
   return Buffer.from(await r.arrayBuffer());
 }
 

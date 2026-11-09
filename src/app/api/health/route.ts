@@ -45,7 +45,7 @@ async function probe(url: string, key: string) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const e = process.env;
   const url = cleanUrl(e.NEXT_PUBLIC_SUPABASE_URL);
   const urlRef = (url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co$/) || [])[1] || '';
@@ -108,5 +108,19 @@ export async function GET() {
     AZURE_SPEECH_KEY: !!e.AZURE_SPEECH_KEY, QUEUE_API_TOKEN: clean(e.QUEUE_API_TOKEN).length >= 16 ? 'ok' : (e.QUEUE_API_TOKEN ? 'too short' : false), DEMO_MODE: e.DEMO_MODE || '0', VERCEL_ENV: e.VERCEL_ENV || 'local',
     DEPLOYED_COMMIT: (e.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || 'unknown',
   };
+  // voice check: /api/health?tts=1 → speaks a short test with the configured voice (heliopolis settings)
+  try {
+    const u = new URL(req.url);
+    if (u.searchParams.get('tts') === '1') {
+      const { getClinicSettings } = await import('@/lib/server/settings');
+      const { speak, providersAvailable } = await import('@/lib/server/tts');
+      const s = await getClinicSettings('heliopolis');
+      const t: Record<string, unknown> = { providers: providersAvailable(), provider_setting: s.voice.provider,
+        voice: s.voice.provider === 'elevenlabs' ? (s.voice.elevenVoiceId || process.env.ELEVENLABS_VOICE_ID) : s.voice.azureVoice };
+      try { const r = await speak('رقم واحد', s.voice, false); t.result = `ok – ${r.provider}, ${r.audio.length} bytes`; }
+      catch (e: any) { t.result = 'FAILED: ' + String(e?.message || e); }
+      (report as any).tts_test = t;
+    }
+  } catch (e: any) { (report as any).tts_test = 'error: ' + String(e?.message || e); }
   return json(report);
 }
