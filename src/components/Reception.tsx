@@ -310,6 +310,7 @@ export default function Reception({ clinic }: { clinic: string }) {
           <Link className="btn-ghost" href={`/summary/${clinic}`}>📋 {t('summary')}</Link>
           {BOOKING_PAGES[clinic] && <button className="btn-ghost" onClick={() => openBookingPage(BOOKING_PAGES[clinic])}
             title={ar ? 'يفتح جدول الحجز في نافذة على يسار الشاشة' : 'opens the booking page on the left'}>📅 {ar ? 'جدول الحجز' : 'Bookings'}</button>}
+          <a className="btn-ghost" href={`/doctor/${clinic}`} target="pq_doctor" title={ar ? 'لوحة رسائل الطبيب للمساعد' : 'doctor → assistant'}>🩺 {ar ? 'رسائل الطبيب' : 'Doctor pad'}</a>
           <button className="btn-ghost" onClick={() => setWa({ phone: '', name: '' })} title={ar ? 'انسخ الرقم من جدول الحجز والصقه هنا' : 'paste a number'}>💬 {ar ? 'واتساب' : 'WhatsApp'}</button>
           <span className="ms-auto self-center text-xs text-slate-400">
             {data.policy === 'time' ? 'ترتيب حسب الموعد' : data.policy === 'checkin' ? 'ترتيب حسب الوصول' : 'أرقام يدوية'}
