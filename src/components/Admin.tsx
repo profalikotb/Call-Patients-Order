@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { FIELD_LABEL_AR, FIELDS, ARABIC_MALE_VOICES, type ClinicSettings, type SheetConfig, type Field } from '@/lib/config';
+import { FIELD_LABEL_AR, FIELDS, ARABIC_MALE_VOICES, MAMDOH_VOICE_ID, type ClinicSettings, type SheetConfig, type Field } from '@/lib/config';
 import { pickVoice } from '@/lib/browserVoice';
 import { spellNumber } from '@/lib/numbers';
 import { renderAnnouncement } from '@/lib/announce';
@@ -147,9 +147,10 @@ function VoiceTab({ s, setS, setV, save, clinic, tts }: any) {
         </div>
         <div className="flex flex-wrap items-center gap-2 rounded-xl bg-ink-950/5 p-3 text-sm">
           <span className="font-semibold">إعداد سريع:</span>
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, provider: 'elevenlabs', elevenVoiceId: MAMDOH_VOICE_ID, azureVoice: 'ar-EG-ShakirNeural', rate: -5, pitch: 0, volume: 1.2, repeatCount: 2, repeatDelaySec: 3, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>🔊 «ممدوح» مصري عميق</button>
           <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-BH-AliNeural', rate: -8, pitch: -4, volume: 1.2, repeatCount: 2, repeatDelaySec: 3, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>🔊 صوت «علي»</button>
           <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-EG-ShakirNeural', rate: -12, pitch: -10, volume: 1.3, repeatCount: 2, repeatDelaySec: 3, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>🔊 صوت رجالي مصري قوي</button>
-          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, azureVoice: 'ar-BH-AliNeural', rate: -8, pitch: -2, volume: 1, repeatCount: 2, repeatDelaySec: 4, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>↺ الافتراضي</button>
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setS({ ...s, voice: { ...v, provider: 'elevenlabs', elevenVoiceId: MAMDOH_VOICE_ID, azureVoice: 'ar-EG-ShakirNeural', rate: -8, pitch: -2, volume: 1, repeatCount: 2, repeatDelaySec: 4, chime: true, style: 'standard', numberStyle: 'egyptian' } })}>↺ الافتراضي</button>
           <span className="text-[11px] text-slate-500">ثم «حفظ إعدادات الصوت»</span>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">

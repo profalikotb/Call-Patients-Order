@@ -66,10 +66,13 @@ export const ARABIC_MALE_VOICES: { id: string; en: string; ar: string; label: st
   { id: 'ar-MA-JamalNeural', en: 'Jamal', ar: 'جمال', label: 'جمال – المغرب' },
 ];
 
+// ElevenLabs «Mamdoh – Deep Egyptian Arabic Male» (needs ELEVENLABS_API_KEY in Vercel; until then the TV uses Shakir in Edge)
+export const MAMDOH_VOICE_ID = '68MRVrnQAt8vLbu0FCzw';
+
 export const DEFAULT_VOICE: VoiceSettings = {
-  provider: 'azure',
-  azureVoice: 'ar-BH-AliNeural',
-  elevenVoiceId: '',
+  provider: 'elevenlabs',
+  azureVoice: 'ar-EG-ShakirNeural',
+  elevenVoiceId: MAMDOH_VOICE_ID,
   rate: -8,
   pitch: -2,
   volume: 1,
