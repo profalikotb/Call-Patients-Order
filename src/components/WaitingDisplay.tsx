@@ -85,7 +85,13 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     for (let i = 0; i < 15 && !ready(); i++) await new Promise((r) => setTimeout(r, 200));
     return speakWith(ss, text);
   };
-  const speakWith = (ss: SpeechSynthesis, text: string) => new Promise<void>((res) => {
+  const speakWith = async (ss: SpeechSynthesis, text: string) => {
+    // Edge/Chrome drop an utterance spoken right after cancel() → only reset a busy queue, then wait a moment
+    if (ss.speaking || ss.pending) { try { ss.cancel(); } catch {} await new Promise((r) => setTimeout(r, 300)); }
+    try { ss.resume(); } catch {}
+    return speakNow(ss, text);
+  };
+  const speakNow = (ss: SpeechSynthesis, text: string) => new Promise<void>((res) => {
     const v = pickVoice(ss.getVoices(), stRef.current?.playback?.voice);
     if (v && !wantedVoiceRe(stRef.current?.playback?.voice).test(v.name)) console.warn('[queue] chosen voice not in this browser, using', v.name);
     const u = new SpeechSynthesisUtterance(text);
@@ -96,9 +102,11 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     u.pitch = Math.min(1.4, Math.max(0.6, 1 + (pb.pitch ?? -2) / 50));
     u.volume = Math.min(1, pb.volume ?? 1);
     u.onend = () => res(); u.onerror = () => res();
-    // Edge/Chrome: a stuck or paused speech queue makes every later call silent → reset it first
-    try { ss.cancel(); ss.resume(); } catch {}
-    ss.speak(u); setTimeout(res, 12000);
+    let started = false; u.onstart = () => { started = true; };
+    ss.speak(u);
+    // Edge sometimes never starts the first utterance → one retry after 1.5 s
+    setTimeout(() => { if (!started && !ss.speaking) { try { ss.cancel(); } catch {} setTimeout(() => ss.speak(u), 200); } }, 1500);
+    setTimeout(res, 15000);
   });
 
   const urlFor = (a: AnnounceState, variant: Variant) => {
