@@ -5,7 +5,6 @@ import { decidePlay, type AnnounceState } from '@/lib/announce';
 import { spellNumber } from '@/lib/numbers';
 import { toArabicDigits } from '@/lib/arabic';
 import type { Variant } from '@/lib/config';
-import { pickVoice, wantedVoiceRe } from '@/lib/browserVoice';
 
 const MAX_AGE_MS = 20000;   // never speak an announcement older than this (reload / reconnect safety)
 const HEARTBEAT_MS = 20000; // lease renew (lease = 60 s server-side)
@@ -18,6 +17,24 @@ function deviceId() {
   } catch { return `tmp-${Math.random().toString(36).slice(2, 12)}`; }
 }
 
+
+// Browser voices: the ONLY male Egyptian voice is Microsoft Edge's online "Shakir".
+// Windows' own ar-EG voice (Hoda) and Google's Arabic voice are FEMALE → never pick them while a male exists.
+// Edge in ARABIC shows the voice names in Arabic («Microsoft شاكر Online (Natural) - العربية (مصر)»),
+// so every name is matched in both scripts.
+const FEMALE_AR = /(hoda|salma|zariyah|laila|layla|amina|amany|fatima|mouna|iman|sana|noura|rana|reem|sara|mariam|maryam|hala|google|هدى|هدي|سلمى|سلمي|زارية|ليلى|ليلي|أمينة|امينة|أماني|اماني|فاطمة|فاطمه|منى|مني|إيمان|ايمان|سناء|نورا|نورة|رنا|ريم|سارة|ساره|مريم|هالة|هاله)/i;
+const MALE_AR = /(shakir|hamed|naayf|bassel|moaz|rami|taim|hamdan|omar|jamal|fahed|abdullah|ali\b|majed|maged|tarik|male|شاكر|حامد|نايف|باسل|معاذ|رامي|تيم|حمدان|عمر|جمال|فهد|عبدالله|عبد الله|ماجد|طارق)/i;
+const SHAKIR = /(shakir|شاكر)/i;
+function pickMaleArabicVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
+  const ar = voices.filter((x) => /^ar/i.test(x.lang));
+  const eg = ar.filter((x) => /^ar[-_]EG/i.test(x.lang));
+  return ar.find((x) => SHAKIR.test(x.name) || SHAKIR.test(x.voiceURI))            // Edge: Microsoft Shakir Online (Natural) – ar-EG male
+    ?? eg.find((x) => MALE_AR.test(x.name))
+    ?? eg.find((x) => /online|natural/i.test(x.name) && !FEMALE_AR.test(x.name))  // ar-EG online voice that is not Salma = Shakir
+    ?? ar.find((x) => MALE_AR.test(x.name) && !FEMALE_AR.test(x.name))             // other Arabic male (e.g. Hamed, Naayf)
+    ?? ar.find((x) => !FEMALE_AR.test(x.name))
+    ?? ar[0];                                                                        // only female available (warned on screen)
+}
 
 export default function WaitingDisplay({ clinic, k, label, auto = false }: { clinic: string; k: string; label: string; auto?: boolean }) {
   const [st, setSt] = useState<any>(null);
@@ -79,21 +96,14 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
   const browserSpeak = async (text: string) => {
     const ss = window.speechSynthesis; if (!ss) return;
     // voice list loads asynchronously (Chrome/Edge): wait for it, else the browser's default (often female) is used
-    // Edge adds its ONLINE voices (Ali, Shakir…) a moment after the local ones → wait until the chosen one appears (max 3 s)
-    const want = wantedVoiceRe(stRef.current?.playback?.voice);
-    const ready = () => { const v = pickVoice(ss.getVoices(), stRef.current?.playback?.voice); return !!v && want.test(v.name); };
-    for (let i = 0; i < 15 && !ready(); i++) await new Promise((r) => setTimeout(r, 200));
+    // Edge adds its ONLINE voices (Shakir) a moment after the local ones → wait until Shakir appears (max 3 s)
+    const hasShakir = () => !!pickMaleArabicVoice(ss.getVoices()) && SHAKIR.test(pickMaleArabicVoice(ss.getVoices())!.name);
+    for (let i = 0; i < 15 && !hasShakir(); i++) await new Promise((r) => setTimeout(r, 200));
     return speakWith(ss, text);
   };
-  const speakWith = async (ss: SpeechSynthesis, text: string) => {
-    // Edge/Chrome drop an utterance spoken right after cancel() → only reset a busy queue, then wait a moment
-    if (ss.speaking || ss.pending) { try { ss.cancel(); } catch {} await new Promise((r) => setTimeout(r, 300)); }
-    try { ss.resume(); } catch {}
-    return speakNow(ss, text);
-  };
-  const speakNow = (ss: SpeechSynthesis, text: string) => new Promise<void>((res) => {
-    const v = pickVoice(ss.getVoices(), stRef.current?.playback?.voice);
-    if (v && !wantedVoiceRe(stRef.current?.playback?.voice).test(v.name)) console.warn('[queue] chosen voice not in this browser, using', v.name);
+  const speakWith = (ss: SpeechSynthesis, text: string) => new Promise<void>((res) => {
+    const v = pickMaleArabicVoice(ss.getVoices());
+    if (v && !SHAKIR.test(v.name)) console.warn('[queue] Egyptian male voice (Shakir) not found, using', v.name);
     const u = new SpeechSynthesisUtterance(text);
     const pb = stRef.current?.playback ?? {};
     if (v) u.voice = v; u.lang = v?.lang || 'ar-EG';
@@ -102,11 +112,7 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     u.pitch = Math.min(1.4, Math.max(0.6, 1 + (pb.pitch ?? -2) / 50));
     u.volume = Math.min(1, pb.volume ?? 1);
     u.onend = () => res(); u.onerror = () => res();
-    let started = false; u.onstart = () => { started = true; };
-    ss.speak(u);
-    // Edge sometimes never starts the first utterance → one retry after 1.5 s
-    setTimeout(() => { if (!started && !ss.speaking) { try { ss.cancel(); } catch {} setTimeout(() => ss.speak(u), 200); } }, 1500);
-    setTimeout(res, 15000);
+    ss.speak(u); setTimeout(res, 12000);
   });
 
   const urlFor = (a: AnnounceState, variant: Variant) => {
