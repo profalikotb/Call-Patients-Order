@@ -61,6 +61,22 @@ export default function Reception({ clinic }: { clinic: string }) {
     } catch (e: any) { setLoadErr(String(e?.message || e)); }
   }, [clinic]);
 
+  // persistent clinic session (stays open after midnight until «إنهاء الجلسة»)
+  const [sess, setSess] = useState<any>(undefined);
+  const [newSess, setNewSess] = useState<string | null>(null);       // date picker value while starting a session
+  const loadSess = useCallback(async () => {
+    try { const j = await (await fetch('/api/session', { cache: 'no-store' })).json(); if (j.ok) setSess(j.session ?? null); } catch {}
+  }, []);
+  const sessionAct = useCallback(async (body: any, okMsg: string) => {
+    setBusy('session');
+    try {
+      const j = await (await fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+      if (j.ok) flash(okMsg); else flash(String(j.detail || j.error || 'تعذّر'), 'err');
+    } catch { flash('تعذر الاتصال بالخادم', 'err'); }
+    setNewSess(null); await loadSess(); await doSync(true); await load(); setBusy(null);
+    [5000, 10000, 16000].forEach((ms) => setTimeout(load, ms));
+  }, [loadSess]);
+
   const loadPcs = useCallback(async () => {
     try {
       const j = await (await fetch('/api/sync', { cache: 'no-store' })).json();
@@ -81,10 +97,10 @@ export default function Reception({ clinic }: { clinic: string }) {
   // initial + 10 s sheet sync loop (server throttles across devices)
   useEffect(() => {
     let alive = true;
-    (async () => { await doSync(true); await load(); await loadPcs(); })();
-    const id = setInterval(async () => { if (!alive || document.hidden) return; await doSync(false); await load(); await loadPcs(); }, 10000);
+    (async () => { await doSync(true); await load(); await loadPcs(); await loadSess(); })();
+    const id = setInterval(async () => { if (!alive || document.hidden) return; await doSync(false); await load(); await loadPcs(); await loadSess(); }, 10000);
     return () => { alive = false; clearInterval(id); };
-  }, [doSync, load, loadPcs]);
+  }, [doSync, load, loadPcs, loadSess]);
 
   // realtime nudge from any device's action
   useEffect(() => {
@@ -250,6 +266,39 @@ export default function Reception({ clinic }: { clinic: string }) {
             {data.policy === 'time' ? 'ترتيب حسب الموعد' : data.policy === 'checkin' ? 'ترتيب حسب الوصول' : 'أرقام يدوية'}
           </span>
         </section>
+
+        {/* clinic session: the list stays the same across midnight until the session is ended */}
+        {sess !== undefined && (() => {
+          const wd = (d: string) => new Intl.DateTimeFormat('ar-EG', { weekday: 'long', timeZone: 'UTC' }).format(new Date(d + 'T12:00:00Z'));
+          const todayIso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
+          const sd = sess ? String(sess.date).slice(0, 10) : '';
+          const other = sess && sess.clinic !== clinic;
+          return (
+            <section className={`flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-xs ring-1 ${!sess ? 'bg-slate-50 ring-slate-200' : other ? 'bg-amber-50 ring-amber-200' : 'bg-emerald-50 ring-emerald-200'}`}>
+              {sess ? (<>
+                <span className="font-bold text-emerald-800">● {ar ? 'الجلسة المفتوحة:' : 'Open session:'}</span>
+                <span className="font-semibold">{sess.clinic_name ?? sess.clinic}</span>
+                <span className="num">{wd(sd)} {fmtDate(sd, ar)}</span>
+                <span className="text-slate-500">· {ar ? 'بدأت' : 'started'} {fmtTs12(sess.started_at, ar ? 'ar' : 'en')}{sess.auto ? (ar ? ' (تلقائياً)' : ' (auto)') : ''}</span>
+                {sd < todayIso && <span className="rounded-full bg-indigo-600 px-2 py-0.5 font-semibold text-white">{ar ? 'مستمرة بعد منتصف الليل' : 'continues past midnight'}</span>}
+                {other && <span className="font-semibold text-amber-800">{ar ? '– هذه الصفحة لعيادة أخرى' : '– this page is another clinic'}</span>}
+              </>) : <span className="text-slate-500">{ar ? 'لا توجد جلسة مفتوحة – تبدأ تلقائياً مع أول قائمة' : 'No open session'}</span>}
+              <span className="ms-auto flex flex-wrap items-center gap-1.5">
+                {newSess !== null ? (<>
+                  <input type="date" className="rounded-lg border border-slate-300 px-2 py-1" value={newSess} max={todayIso}
+                    onChange={(e) => setNewSess(e.target.value)} />
+                  <button className="btn-primary px-3 py-1 text-xs" disabled={!!busy || !newSess}
+                    onClick={() => sessionAct({ action: 'start', clinic, date: newSess }, 'بدأت جلسة جديدة')}>{ar ? 'بدء الجلسة' : 'Start'}</button>
+                  <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setNewSess(null)}>{ar ? 'إلغاء' : 'Cancel'}</button>
+                </>) : (<>
+                  <button className="btn-ghost px-3 py-1 text-xs" disabled={!!busy} onClick={() => setNewSess(todayIso)}>＋ {ar ? 'جلسة جديدة' : 'New session'}</button>
+                  {sess && <button className="btn-ghost px-3 py-1 text-xs text-rose-700" disabled={!!busy}
+                    onClick={() => setDialog({ type: 'confirm', text: `إنهاء جلسة ${sess.clinic_name ?? ''} (${fmtDate(sd, true)})؟ المرضى يُحفظون في الأرشيف ولا يُحذفون.`,
+                      run: () => sessionAct({ action: 'end' }, 'تم إنهاء الجلسة') })}>■ {ar ? 'إنهاء الجلسة' : 'End session'}</button>}
+                </>)}
+              </span>
+            </section>);
+        })()}
 
         {/* push mode: which PC sends today's list – tap to choose (stays all day), «تلقائي» = by priority, 📍 = this browser's PC */}
         {pcs && pcs.sources.length > 0 && (() => {

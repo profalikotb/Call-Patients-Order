@@ -4,7 +4,7 @@ import { handle, json, checkDisplayKey, clinicParam } from '@/lib/server/http';
 import { db } from '@/lib/server/db';
 import { getClinic, getClinicSettings } from '@/lib/server/settings';
 import { providersAvailable } from '@/lib/server/tts';
-import { cairoDate } from '@/lib/time';
+import { sessionDate } from '@/lib/server/session';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,7 @@ export const GET = handle(async (req) => {
     db().from('display_state').select('*').eq('clinic_id', clinic).maybeSingle()]);
   if (!c) return json({ ok: false, error: 'unknown_clinic' }, 404);
   const d = row.data;
-  const today = cairoDate();
+  const today = await sessionDate(clinic);
   const fresh = d && d.service_date === today;
   const set = s.voice.style === 'formal' ? s.templates.formal : s.templates.standard;
   const h = createHash('sha1').update(JSON.stringify([s.voice, s.templates, s.room_label])).digest('hex').slice(0, 12);

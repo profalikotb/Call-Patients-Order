@@ -14,6 +14,7 @@ import { cairoDate } from '@/lib/time';
 import { clean } from '@/lib/envClean';
 import { sheetSource } from '@/lib/server/sheets';
 import { clientIp, pcForCaller, pushOwner, requestPushAndWait } from '@/lib/server/pushSource';
+import { getSession } from '@/lib/server/session';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
@@ -45,22 +46,20 @@ export const POST = handle(async (req) => {
   if (!b) throw new HttpError(400, 'bad_json');
   const action = String(b.action || 'call_next');
   if (!ALLOWED.has(action)) throw new HttpError(400, 'bad_action');
-  const date = cairoDate();
   const push = sheetSource() === 'push';
-  // auto: Friday → Toukh, else Heliopolis; with desktop push the Toukh PC's list always goes to Toukh
-  let auto = autoClinic();
-  if (push && (!b.clinic || b.clinic === 'auto')) {
-    const host = clean(b.host) || (String(b.actor || '').match(/@([^\s]+)$/)?.[1] ?? '');
-    const pc = (host ? await pcForCaller(host, clientIp(req)) : null) ?? (await pushOwner(date)).owner;
-    if (pc === 'toukh') auto = 'toukh';
-  }
+  // auto = the clinic of the open session (stays the same after midnight);
+  // no session yet: the Toukh PC or Friday → Toukh, else Heliopolis
+  const host = clean(b.host) || (String(b.actor || '').match(/@([^\s]+)$/)?.[1] ?? '');
+  const callerPc = push && host ? await pcForCaller(host, clientIp(req)) : null;
+  const session = await getSession(callerPc === 'toukh' ? 'toukh' : autoClinic());
+  const auto = session?.clinic ?? (callerPc === 'toukh' ? 'toukh' : autoClinic());
   const clinic = clinicParam(!b.clinic || b.clinic === 'auto' ? auto : String(b.clinic));
+  const date = session && session.clinic === clinic ? String(session.date).slice(0, 10) : cairoDate();
 
   // Desktop push: the button was pressed on a PC → THAT PC's Oracle list is used (switch + wait for it once)
   let pushNote: string | undefined;
   if (push && (action === 'call_next' || action === 'call')) {
-    const host = clean(b.host) || (String(b.actor || '').match(/@([^\s]+)$/)?.[1] ?? '');
-    const me = host ? await pcForCaller(host, clientIp(req)) : null;
+    const me = callerPc;
     if (me && (await pushOwner(date)).owner !== me) {
       const w = await requestPushAndWait(date, me);
       if (!w.ok) pushNote = w.error;

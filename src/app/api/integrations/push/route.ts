@@ -14,6 +14,7 @@ import { parseSheet, matchClinic } from '@/lib/sheetParse';
 import { cairoDate } from '@/lib/time';
 import { clean } from '@/lib/envClean';
 import { clientIp, notePcAddress } from '@/lib/server/pushSource';
+import { getSession, defaultClinic } from '@/lib/server/session';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -33,14 +34,17 @@ export const POST = handle(async (req) => {
   if (!b || !Array.isArray(b.rows)) throw new HttpError(400, 'bad_json');
   if (b.rows.length > 2000) throw new HttpError(413, 'too_many_rows');
 
-  const today = cairoDate();
+  // the list belongs to the open CLINIC SESSION (clinic + clinic date), not to the calendar:
+  // after midnight the session keeps its date and the PC is told which date to read from Oracle
+  const source = S(b.source, 40) || 'desktop';
+  const session = await getSession(defaultClinic(source));
+  const today = session ? String(session.date).slice(0, 10) : cairoDate();
   if (b.date && String(b.date) !== today) {
-    // the desktop clock disagrees with Cairo time → refuse, never write another day's list into today
-    return json({ ok: false, error: 'wrong_date', detail: `desktop date ${b.date} ≠ Cairo date ${today} – fix the PC clock` }, 409);
+    // the PC read another date (old installer = its own clock) → refuse, never mix another day into this session
+    return json({ ok: false, error: 'wrong_date', expected: today,
+      detail: `PC sent ${b.date} but the open session is ${today} – the PC switches to ${today} automatically (new installer)` }, 409);
   }
 
-  // one PC owns today's list; another PC is refused until the owner has been silent for 3 min
-  const source = S(b.source, 40) || 'desktop';
   // (before migration 005 is run the function is missing → push works as before, without the lock)
   const prio = Math.max(1, Math.min(9, Number(b.priority) || 9));
   const lease = await rpc<any>('push_claim', { p_date: today, p_source: source, p_priority: prio,
@@ -52,12 +56,10 @@ export const POST = handle(async (req) => {
     detail: `${lease?.owner} is sending today's list${lease?.pinned ? ' (chosen in reception)' : ''} – this PC waits` }, 409);
 
   const clinics = (await getClinics()).filter((c) => c.active);
-  // a day whose clinic has no screen (e.g. Monday «وادي النيل») → the screen of the PC that sends:
-  // Toukh PC or Friday → Toukh, every other PC → Heliopolis
-  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', weekday: 'short' }).format(new Date());
-  const fallbackId = source === 'toukh' || weekday === 'Fri' ? 'toukh' : 'heliopolis';
-  const fallback = clinics.find((c) => c.id === fallbackId) ?? clinics[0];
-  const clinicOf = (v: string) => (matchClinic(v, clinics) ? v : (fallback?.id ?? v));
+  // all rows go to the session's clinic (whatever weekday label the PC used – e.g. Monday «وادي النيل»);
+  // without sessions (009 not run): Toukh PC or Friday → Toukh, else Heliopolis
+  const target = session?.clinic ?? defaultClinic(source);
+  const clinicOf = (v: string) => (session ? target : matchClinic(v, clinics) ? v : target);
 
   const values: unknown[][] = [HEADERS, ...b.rows.map((r: any) => [
     S(r.call_no, 6), S(r.booking_id, 30), S(r.date, 10), clinicOf(S(r.clinic, 60)), S(r.name, 120),
@@ -90,9 +92,12 @@ export const GET = handle(async (req) => {
   checkToken(req);
   const sp = new URL(req.url).searchParams;
   const src = S(sp.get('source'), 40) || 'desktop';
-  const r = await rpc<any>('push_poll', { p_date: cairoDate(), p_source: src,
+  const session = await getSession(defaultClinic(src));
+  const date = session ? String(session.date).slice(0, 10) : cairoDate();
+  const r = await rpc<any>('push_poll', { p_date: date, p_source: src,
     p_priority: Math.max(1, Math.min(9, Number(sp.get('priority')) || 9)), p_label: S(sp.get('label'), 60) || null,
     p_error: S(sp.get('err'), 300) || null });
   await notePcAddress(src, S(sp.get('host'), 40), clientIp(req));
-  return json({ ok: true, want: !!r?.want, owner: r?.owner ?? null });
+  // date = the clinic date the PC must read from Oracle (stays the same after midnight)
+  return json({ ok: true, want: !!r?.want, owner: r?.owner ?? null, date, clinic: session?.clinic ?? null });
 });

@@ -3,7 +3,7 @@ import { db } from '@/lib/server/db';
 import { getClinic, getClinicSettings } from '@/lib/server/settings';
 import { providersAvailable } from '@/lib/server/tts';
 import { sheetSource } from '@/lib/server/sheets';
-import { cairoDate } from '@/lib/time';
+import { sessionDate } from '@/lib/server/session';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ const ORDER: Record<string, number> = { in_room: 0, called: 1, waiting: 2, booke
 export const GET = handle(async (req) => {
   const clinic = clinicParam(new URL(req.url).searchParams.get('clinic'));
   await requireStaff({ clinic });
-  const today = cairoDate();
+  const today = await sessionDate(clinic);
   const [c, settings, entries, day, display, last] = await Promise.all([
     getClinic(clinic),
     getClinicSettings(clinic),

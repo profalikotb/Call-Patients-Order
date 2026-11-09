@@ -1,6 +1,6 @@
 import { handle, json, requireStaff, clinicParam, HttpError } from '@/lib/server/http';
 import { rpc } from '@/lib/server/db';
-import { cairoDate } from '@/lib/time';
+import { sessionDate } from '@/lib/server/session';
 export const runtime = 'nodejs';
 
 const ACTIONS = new Set(['call_next', 'call', 'repeat', 'skip', 'return_waiting', 'in_room', 'done', 'postpone', 'cancel',
@@ -21,7 +21,7 @@ export const POST = handle(async (req) => {
     args.procedure = String(args.procedure ?? '').slice(0, 80);
   }
   const res = await rpc('queue_apply', {
-    p_clinic: clinic, p_date: cairoDate(), p_action: b.action, p_entry: b.entryId ?? null,
+    p_clinic: clinic, p_date: await sessionDate(clinic), p_action: b.action, p_entry: b.entryId ?? null,
     p_expected_version: Number.isFinite(b.expectedVersion) ? b.expectedVersion : null,
     p_actor: s.name || s.sub, p_idem: typeof b.idem === 'string' ? b.idem.slice(0, 80) : null, p_args: args,
   });

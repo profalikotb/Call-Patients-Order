@@ -4,7 +4,7 @@ import { db } from '@/lib/server/db';
 import { getClinicSettings } from '@/lib/server/settings';
 import { speak, audioResponse } from '@/lib/server/tts';
 import { renderAnnouncement } from '@/lib/announce';
-import { cairoDate } from '@/lib/time';
+import { sessionDate } from '@/lib/server/session';
 import type { Variant } from '@/lib/config';
 export const runtime = 'nodejs';
 
@@ -16,7 +16,7 @@ export const GET = handle(async (req) => {
   const variant = (u.searchParams.get('variant') || 'call') as Variant;
   if (!Number.isInteger(seq) || seq < 1) throw new HttpError(400, 'bad_seq');
   const { data: a } = await db().from('announcements').select('queue_number, entry_id, kind')
-    .eq('clinic_id', clinic).eq('service_date', cairoDate()).eq('seq', seq).maybeSingle();
+    .eq('clinic_id', clinic).eq('service_date', await sessionDate(clinic)).eq('seq', seq).maybeSingle();
   if (!a?.queue_number) throw new HttpError(404, 'no_announcement');
   const s = await getClinicSettings(clinic);
   let name: string | null = null;

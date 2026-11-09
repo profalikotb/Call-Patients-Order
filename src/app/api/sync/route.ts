@@ -3,6 +3,9 @@ import { syncAll } from '@/lib/server/sync';
 import { sheetSource } from '@/lib/server/sheets';
 import { rpc } from '@/lib/server/db';
 import { cairoDate } from '@/lib/time';
+import { getSession } from '@/lib/server/session';
+
+const sessDate = async () => { const s = await getSession(); return s ? String(s.date).slice(0, 10) : cairoDate(); };
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +18,7 @@ const need006 = (e: any) => {
 export const GET = handle(async () => {
   await requireStaff();
   if (sheetSource() !== 'push') return json({ ok: true, source: sheetSource(), sources: [] });
-  const r = await rpc<any>('push_status', { p_date: cairoDate() }).catch(need006);
+  const r = await rpc<any>('push_status', { p_date: await sessDate() }).catch(need006);
   return json({ ok: true, source: 'push', ...r });
 });
 
@@ -26,7 +29,7 @@ export const POST = handle(async (req) => {
   if (sheetSource() === 'push') {
     if (!force && !pc) return json({ ok: true, skipped: true, source: 'push' });
     const name = pc ? String(pc).trim().slice(0, 40) : null;
-    const r = await rpc<any>('push_request', { p_date: cairoDate(), p_source: name }).catch(need006);
+    const r = await rpc<any>('push_request', { p_date: await sessDate(), p_source: name }).catch(need006);
     if (!r?.ok) throw new HttpError(409, r?.error === 'pc_offline'
       ? `${r.label || name} غير متصل الآن – شغّل الجهاز وتأكد من الإنترنت`
       : `جهاز غير معروف: ${name}`);
