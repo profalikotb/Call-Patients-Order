@@ -10,7 +10,7 @@ import { handle, json, HttpError } from '@/lib/server/http';
 import { rpc } from '@/lib/server/db';
 import { getClinics, getSheetConfig } from '@/lib/server/settings';
 import { applyValues } from '@/lib/server/sync';
-import { parseSheet } from '@/lib/sheetParse';
+import { parseSheet, matchClinic } from '@/lib/sheetParse';
 import { cairoDate } from '@/lib/time';
 import { clean } from '@/lib/envClean';
 import { clientIp, notePcAddress } from '@/lib/server/pushSource';
@@ -51,12 +51,19 @@ export const POST = handle(async (req) => {
     pinned: !!lease?.pinned,
     detail: `${lease?.owner} is sending today's list${lease?.pinned ? ' (chosen in reception)' : ''} – this PC waits` }, 409);
 
+  const clinics = (await getClinics()).filter((c) => c.active);
+  // a day whose clinic has no screen (e.g. Monday «وادي النيل») → the screen of the PC that sends:
+  // Toukh PC or Friday → Toukh, every other PC → Heliopolis
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', weekday: 'short' }).format(new Date());
+  const fallbackId = source === 'toukh' || weekday === 'Fri' ? 'toukh' : 'heliopolis';
+  const fallback = clinics.find((c) => c.id === fallbackId) ?? clinics[0];
+  const clinicOf = (v: string) => (matchClinic(v, clinics) ? v : (fallback?.id ?? v));
+
   const values: unknown[][] = [HEADERS, ...b.rows.map((r: any) => [
-    S(r.call_no, 6), S(r.booking_id, 30), S(r.date, 10), S(r.clinic, 60), S(r.name, 120),
+    S(r.call_no, 6), S(r.booking_id, 30), S(r.date, 10), clinicOf(S(r.clinic, 60)), S(r.name, 120),
     S(r.phone, 40), S(r.kind, 40), r.seen ? 'تم الكشف' : '', S(r.patient_code, 30),
   ])];
 
-  const clinics = (await getClinics()).filter((c) => c.active);
   const cfg = { ...(await getSheetConfig()), headerRow: 1, mapping: {} };   // fixed layout → auto-detect
   // only clinics that actually have rows in this push are touched (a Friday push never empties Heliopolis)
   const pre = parseSheet(values, cfg, clinics, today);

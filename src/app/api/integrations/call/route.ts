@@ -43,11 +43,18 @@ export const POST = handle(async (req) => {
   checkToken(req);
   const b = await req.json().catch(() => null);
   if (!b) throw new HttpError(400, 'bad_json');
-  const clinic = clinicParam(!b.clinic || b.clinic === 'auto' ? autoClinic() : String(b.clinic));
   const action = String(b.action || 'call_next');
   if (!ALLOWED.has(action)) throw new HttpError(400, 'bad_action');
   const date = cairoDate();
   const push = sheetSource() === 'push';
+  // auto: Friday → Toukh, else Heliopolis; with desktop push the Toukh PC's list always goes to Toukh
+  let auto = autoClinic();
+  if (push && (!b.clinic || b.clinic === 'auto')) {
+    const host = clean(b.host) || (String(b.actor || '').match(/@([^\s]+)$/)?.[1] ?? '');
+    const pc = (host ? await pcForCaller(host, clientIp(req)) : null) ?? (await pushOwner(date)).owner;
+    if (pc === 'toukh') auto = 'toukh';
+  }
+  const clinic = clinicParam(!b.clinic || b.clinic === 'auto' ? auto : String(b.clinic));
 
   // Desktop push: the button was pressed on a PC → THAT PC's Oracle list is used (switch + wait for it once)
   let pushNote: string | undefined;
