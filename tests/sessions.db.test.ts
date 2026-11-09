@@ -42,3 +42,11 @@ describe('persistent clinic sessions', () => {
     expect(list.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe('patient code', () => {
+  it('queue_set_codes stores the Oracle code by booking id', async () => {
+    await q(`insert into queue_entries (clinic_id, service_date, booking_key, booking_id, patient_name) values ('heliopolis','2026-11-09','b:28852','28852','أحمد')`);
+    await q(`select queue_set_codes('heliopolis','2026-11-09','{"28852":"662282","999":"1"}'::jsonb)`);
+    expect((await q(`select patient_code from queue_entries where booking_id = '28852'`))[0].patient_code).toBe('662282');
+  });
+});

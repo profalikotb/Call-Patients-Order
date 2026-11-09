@@ -164,6 +164,7 @@ export default function Reception({ clinic }: { clinic: string }) {
       if (filter !== 'active' && filter !== 'all' && e.status !== filter) return false;
       if (!q) return true;
       return normalizeAr(e.patient_name).includes(nq) || (e.booking_id && normalizeAr(e.booking_id).includes(nq)) ||
+        (dq.length >= 1 && String(e.patient_code ?? '') === dq) ||
         (dq.length >= 2 && ((e.phone ?? '').includes(dq) || String(e.queue_number ?? '') === dq));
     });
   }, [entries, filter, q]);
@@ -346,6 +347,30 @@ export default function Reception({ clinic }: { clinic: string }) {
           </>);
         })()}
 
+        {/* live counters for this session's list */}
+        {entries.length > 0 && (() => {
+          const live = entries.filter((e) => e.status !== 'cancelled');
+          const kind = (e: Entry, k: string) => normalizeAr(e.procedure ?? '').includes(normalizeAr(k));
+          const done = live.filter((e) => e.status === 'done').length;
+          const waiting = live.filter((e) => e.status === 'waiting' || e.status === 'booked').length;
+          const cards: [string, number, string, string][] = [
+            ['إجمالي المرضى', live.length, '👥', 'bg-blue-700'],
+            ['كشف', live.filter((e) => kind(e, 'كشف')).length, '🩺', 'bg-teal-600'],
+            ['استشارة', live.filter((e) => kind(e, 'استشارة')).length, '💬', 'bg-purple-600'],
+            ['في الانتظار', waiting, '⏳', 'bg-amber-500'],
+            ['تم الكشف', done, '✔', 'bg-emerald-600'],
+            ['المتبقون', live.length - done, '➜', 'bg-orange-500'],
+          ];
+          return (
+            <section className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {cards.map(([label, n, icon, bg]) => (
+                <div key={label} className={`${bg} rounded-xl px-3 py-2 text-white shadow-sm`}>
+                  <div className="flex items-center justify-between text-xs font-semibold opacity-90"><span>{label}</span><span>{icon}</span></div>
+                  <div className="num text-2xl font-black leading-tight">{N(n)}</div>
+                </div>))}
+            </section>);
+        })()}
+
         {/* list */}
         <section className="card overflow-visible">
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
@@ -417,6 +442,7 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
       <div className={`num grid h-12 w-12 shrink-0 place-items-center rounded-xl text-xl font-extrabold ${isCurrent ? 'bg-gold-500 text-ink-950' : 'bg-slate-100 text-ink-800'}`}>{N(e.queue_number)}</div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
+          {e.patient_code && <span className="num rounded-lg bg-blue-700 px-2 py-0.5 text-lg font-black leading-tight tracking-wide text-white" dir="ltr" title={ar ? "كود المريض" : "Patient code"}>{N(e.patient_code)}</span>}
           <span className="truncate font-bold text-ink-900">{e.patient_name || '—'}</span>
           {e.priority && <span className="chip bg-rose-600 text-white">طارئ</span>}
           {e.source === 'walkin' && <span className="chip bg-teal-50 text-teal-700">بدون حجز</span>}
@@ -425,7 +451,7 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
         <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
           <span className="num">{fmtTime12(e.appt_time, lang)}</span>
           {e.procedure && <span>{e.procedure}</span>}
-          {e.booking_id && <span className="num" dir="ltr">#{e.booking_id}</span>}
+          {!e.patient_code && e.booking_id && <span className="num" dir="ltr">#{e.booking_id}</span>}
           {e.phone && <a className="num text-sky-700" dir="ltr" href={`https://wa.me/2${e.phone}`} target="_blank" rel="noreferrer">{e.phone}</a>}
           {e.est_wait_min !== null && <span className="text-violet-700">≈ {N(e.est_wait_min)} د ({ar ? 'تقديري' : 'est.'})</span>}
           {e.called_at && <span>نداء {fmtTs12(e.called_at, lang)}</span>}

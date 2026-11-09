@@ -76,6 +76,10 @@ export const POST = handle(async (req) => {
   for (const id of targets) await rpc('sync_claim', { p_clinic: id, p_date: today, p_min_seconds: 0 });
   try {
     const { out, parsed } = await applyValues(values, cfg, clinics, targets, today);
+    // patient code (Oracle PATIENT_CODE) per booking → shown in reception (needs migration 012)
+    const codes: Record<string, string> = {};
+    for (const r of b.rows as any[]) { const bid = S(r.booking_id, 30); if (bid) codes[bid] = S(r.patient_code, 30); }
+    for (const id of targets) await rpc('queue_set_codes', { p_clinic: id, p_date: today, p_codes: codes }).catch(() => {});
     return json({ ok: true, source: S(b.source, 40) || 'desktop', date: today, rows: b.rows.length,
       clinics: Object.fromEntries(Object.entries(out).map(([k, v]: any) => [k, {
         inserted: v.inserted, updated: v.updated, removed: v.removed, seen_done: v.seen_done ?? 0, mirrored: v.mirrored ?? 0 }])),
