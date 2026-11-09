@@ -692,6 +692,13 @@ function DoctorMessages({ clinic, msgs, reload }: { clinic: string; msgs: any[];
     return () => clearInterval(id);
   }, [msgs.length, msgs]);
   useEffect(() => { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} }, []);
+  // voice notes play by themselves once (after the chime); ▶ plays again
+  const played = useRef<Set<number>>(new Set());
+  const play = (m: any) => { try { new Audio(`/api/staff-msg/voice?clinic=${clinic}&id=${m.id}`).play().catch(() => {}); } catch {} };
+  useEffect(() => {
+    for (const m of msgs) if (m.audio_path && !played.current.has(m.id)) { played.current.add(m.id); setTimeout(() => play(m), 900); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msgs]);
   if (!msgs.length) return null;
   const ack = async (id: number) => {
     await fetch('/api/staff-msg', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, ack: id }) }).catch(() => {});
@@ -707,6 +714,7 @@ function DoctorMessages({ clinic, msgs, reload }: { clinic: string; msgs: any[];
             <div className="text-xl font-black">{m.body}</div>
             <div className="text-xs opacity-80">{m.from_label ?? 'الطبيب'} · {time(m.created_at)}</div>
           </div>
+          {m.audio_path && <button onClick={() => play(m)} className="rounded-xl bg-white/20 px-4 py-2 text-lg font-black">▶</button>}
           <button onClick={() => ack(m.id)} className="rounded-xl bg-white px-5 py-2 text-lg font-black text-rose-700">تم ✓</button>
         </div>))}
     </div>
