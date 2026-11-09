@@ -116,6 +116,42 @@ Public Sub QueueFixButtons()
     MsgBox n & " button(s) fixed.", vbInformation, "Smart Queue"
 End Sub
 
+' ---- Doctor -> assistant messages (instead of the local phone) -------------
+'  Button On Click examples:
+'     =QueueAssist()   (come to the room)      =QueueNextIn()   (bring the next patient in)
+'     =QueueMsg("any text")   (Arabic text typed in the On Click box works)
+'  The reception page shows a red banner + chime until the assistant presses "OK".
+Public Function QueueAssist() As Boolean
+    QueueAssist = QueueMsg(ChrW(1578) & ChrW(1593) & ChrW(1575) & ChrW(1604) & " " & ChrW(1604) & ChrW(1604) & ChrW(1594) & ChrW(1585) & ChrW(1601) & ChrW(1577))
+End Function
+
+Public Function QueueNextIn() As Boolean
+    QueueNextIn = QueueMsg(ChrW(1571) & ChrW(1583) & ChrW(1582) & ChrW(1604) & " " & ChrW(1575) & ChrW(1604) & ChrW(1605) & ChrW(1585) & ChrW(1610) & ChrW(1590) & " " & ChrW(1575) & ChrW(1604) & ChrW(1578) & ChrW(1575) & ChrW(1604) & ChrW(1610))
+End Function
+
+Public Function QueueMsg(ByVal text As String) As Boolean
+    On Error GoTo EH
+    Dim x As Object, body As String
+    If Trim$(text) = "" Then text = InputBox("Message to the assistant:", "Smart Queue")
+    If Trim$(text) = "" Then Exit Function
+    body = "{""clinic"":""" & QUEUE_CLINIC & """,""text"":""" & JEsc(text) & """,""actor"":""" & JEsc(CurrentUserLabel()) & """}"
+    Set x = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    x.setTimeouts 5000, 5000, 15000, 15000
+    x.Open "POST", Replace(QUEUE_URL, "/call", "/msg"), False
+    x.setRequestHeader "Content-Type", "application/json; charset=utf-8"
+    x.setRequestHeader "X-Queue-Token", QUEUE_TOKEN
+    x.send body
+    If x.Status = 200 Then
+        Debug.Print Format$(Now, "hh:nn AM/PM"), "Message sent"
+        QueueMsg = True
+    Else
+        MsgBox "Message failed (" & x.Status & "): " & Left$(x.responseText, 200), vbExclamation, "Smart Queue"
+    End If
+    Exit Function
+EH:
+    MsgBox "No connection to the queue system:" & vbCrLf & Err.Description, vbCritical, "Smart Queue"
+End Function
+
 Public Function QueueRepeat() As Boolean
     QueueRepeat = QueueSend("repeat", "")
 End Function

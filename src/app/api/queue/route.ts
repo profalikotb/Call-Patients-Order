@@ -5,6 +5,7 @@ import { providersAvailable } from '@/lib/server/tts';
 import { sheetSource } from '@/lib/server/sheets';
 import { sessionDate } from '@/lib/server/session';
 import { bookingsList } from '@/lib/server/bookings';
+import { listStaffMsgs } from '@/lib/server/staffMsg';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,7 @@ export const GET = handle(async (req) => {
   const clinic = clinicParam(new URL(req.url).searchParams.get('clinic'));
   const me = await requireStaff({ clinic });
   const today = await sessionDate(clinic);
-  const [c, settings, entries, day, display, last, blist] = await Promise.all([
+  const [c, settings, entries, day, display, last, blist, msgs] = await Promise.all([
     getClinic(clinic),
     getClinicSettings(clinic),
     db().from('queue_entries').select('*').eq('clinic_id', clinic).eq('service_date', today),
@@ -23,6 +24,7 @@ export const GET = handle(async (req) => {
     db().from('audit_log').select('id,action,actor,created_at,entry_id').eq('clinic_id', clinic).eq('service_date', today)
       .eq('undone', false).neq('action', 'undo').order('id', { ascending: false }).limit(1),
     bookingsList(today),
+    listStaffMsgs(clinic),
   ]);
   if (!c) return json({ ok: false, error: 'unknown_clinic' }, 404);
   if (entries.error) throw entries.error;
@@ -66,6 +68,7 @@ export const GET = handle(async (req) => {
     last_action: last.data?.[0] ?? null,
     // read-only guide: today's online bookings (in_list = same patient code already in Oracle's list)
     bookings: blist.map((x) => ({ ...x, in_list: oracleCodes.has(x.code) })),
+    messages: msgs.filter((m: any) => !m.ack_at),            // doctor → assistant, unread
     tts: providersAvailable(), sheet_source: sheetSource(), server_now: Date.now(),
   });
 });

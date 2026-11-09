@@ -40,6 +40,7 @@ export default function Home() {
             <div className="mt-4 grid gap-2">
               <Link className="btn-primary py-3" href={`/reception/${c.id}`}>{t('reception')}</Link>
               <Link className="btn-ghost" href={`/summary/${c.id}`}>{t('summary')}</Link>
+              <Link className="btn-ghost" href={`/doctor/${c.id}`}>🩺 {lang === 'ar' ? 'رسائل للمساعد' : 'Doctor → assistant'}</Link>
             </div>
           </div>
         ))}

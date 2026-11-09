@@ -450,6 +450,7 @@ export default function Reception({ clinic }: { clinic: string }) {
         </div>)}
 
       {dialog && <Dialog dialog={dialog} close={() => setDialog(null)} act={act} policy={data.policy} />}
+      <DoctorMessages clinic={clinic} msgs={data.messages ?? []} reload={load} />
       {wa && <WhatsAppBox init={wa} clinicName={data.clinic.name_ar} room={data.room_label} close={() => setWa(null)} />}
     </div>
   );
@@ -665,6 +666,49 @@ function WhatsAppBox({ init, clinicName, room, close }: { init: { phone: string;
           <button className="btn-ghost" onClick={close}>إغلاق</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Doctor → assistant messages: loud banner + repeating chime until «تم ✓»
+function DoctorMessages({ clinic, msgs, reload }: { clinic: string; msgs: any[]; reload: () => void }) {
+  const ctx = useRef<AudioContext | null>(null);
+  useEffect(() => {                                   // the browser allows sound after the first click on the page
+    const unlock = () => { try { ctx.current ??= new AudioContext(); ctx.current.resume(); } catch {} };
+    window.addEventListener('pointerdown', unlock); return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
+  useEffect(() => {
+    if (!msgs.length) return;
+    const ding = () => {
+      const c = ctx.current; if (!c) return;
+      [880, 660, 880].forEach((f, i) => {
+        const o = c.createOscillator(), g = c.createGain(), t = c.currentTime + i * 0.22;
+        o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2); o.connect(g).connect(c.destination); o.start(t); o.stop(t + 0.22);
+      });
+    };
+    ding(); const id = setInterval(ding, 4000);
+    try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('رسالة من الطبيب', { body: msgs[0].body }); } catch {}
+    return () => clearInterval(id);
+  }, [msgs.length, msgs]);
+  useEffect(() => { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} }, []);
+  if (!msgs.length) return null;
+  const ack = async (id: number) => {
+    await fetch('/api/staff-msg', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, ack: id }) }).catch(() => {});
+    reload();
+  };
+  const time = (t: string) => new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' }).format(new Date(t));
+  return (
+    <div className="fixed inset-x-0 top-0 z-[60] space-y-1 p-2">
+      {msgs.slice(0, 3).map((m) => (
+        <div key={m.id} className="mx-auto flex max-w-3xl animate-pulse items-center gap-3 rounded-2xl bg-rose-600 px-5 py-4 text-white shadow-2xl ring-4 ring-rose-300">
+          <span className="text-3xl">🔔</span>
+          <div className="flex-1">
+            <div className="text-xl font-black">{m.body}</div>
+            <div className="text-xs opacity-80">{m.from_label ?? 'الطبيب'} · {time(m.created_at)}</div>
+          </div>
+          <button onClick={() => ack(m.id)} className="rounded-xl bg-white px-5 py-2 text-lg font-black text-rose-700">تم ✓</button>
+        </div>))}
     </div>
   );
 }
