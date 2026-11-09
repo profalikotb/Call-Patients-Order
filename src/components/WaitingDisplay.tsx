@@ -228,7 +228,27 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     return () => { document.removeEventListener('visibilitychange', vis); lock?.release?.(); };
   }, [unlocked]);
 
+  // Edge/Chrome only allow the browser VOICE (speechSynthesis) after a real click/key on the page –
+  // the chime (Web Audio) may play without one. Prime the voice on the first click.
+  const [speechReady, setSpeechReady] = useState(false);
+  const primeSpeech = useCallback(() => {
+    try {
+      const ss = window.speechSynthesis; if (!ss) return;
+      ss.getVoices();
+      const u = new SpeechSynthesisUtterance(' '); u.volume = 0; ss.speak(u);
+      setSpeechReady(true);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    if (speechReady) return;
+    const on = () => primeSpeech();
+    window.addEventListener('pointerdown', on, { once: true });
+    window.addEventListener('keydown', on, { once: true });
+    return () => { window.removeEventListener('pointerdown', on); window.removeEventListener('keydown', on); };
+  }, [speechReady, primeSpeech]);
+
   async function activate(force = false) {
+    primeSpeech();
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     if (!ctx.current) { ctx.current = new AC(); gain.current = ctx.current.createGain(); gain.current.connect(ctx.current.destination); }
     await ctx.current.resume();
@@ -345,6 +365,12 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
           الصوت مفعّل على جهاز آخر{holder.label ? ` (${holder.label})` : ''} —
           <button className="ms-3 rounded-lg bg-ink-950 px-3 py-1 text-white" onClick={() => activate(true)}>نقل الصوت لهذه الشاشة</button>
         </div>)}
+
+      {unlocked && unlockedRef.current && !speechReady && !st?.playback?.server_tts && (
+        <button onClick={primeSpeech} style={{ cursor: 'pointer' }}
+          className="absolute inset-x-0 bottom-[9vh] mx-auto w-fit max-w-[90vw] rounded-2xl bg-amber-400 px-8 py-4 text-[1.6vw] font-black text-ink-950 shadow-2xl">
+          🔊 اضغط هنا مرة واحدة لتشغيل صوت النداء
+        </button>)}
 
       {!unlocked && (
         <div className="absolute inset-0 grid place-items-center bg-ink-950/85 backdrop-blur-sm">
