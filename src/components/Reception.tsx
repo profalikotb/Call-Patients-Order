@@ -49,7 +49,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   const [pcs, setPcs] = useState<{ owner: string | null; pinned: boolean; ownerAgo: number | null; sources: any[] } | null>(null);
   const [thisPc, setThisPc] = useState<string>('');
   useEffect(() => { try { setThisPc(localStorage.getItem('queue.thisPc') || ''); } catch {} }, []);
-  // TV link needs the display key, which the server only gives to admins (same rule as the home launcher).
+  // TV link needs the display key; the server gives it to any signed-in staff (admin or assistant).
   const [tvKey, setTvKey] = useState('');
   useEffect(() => {
     fetch('/api/clinics', { cache: 'no-store' }).then((r) => r.json()).then((j) => setTvKey(j?.display_key || '')).catch(() => {});

@@ -11,5 +11,7 @@ export const GET = handle(async () => {
   const open = await getSession().catch(() => null);
   return json({ ok: true, clinics, session: s, demo: process.env.DEMO_MODE === '1',
     open_clinic: open?.clinic ?? null,
-    display_key: s.role === 'admin' ? clean(process.env.DISPLAY_KEY) : undefined });   // TV links: admin only
+    // TV links for any signed-in staff (admin + reception assistants), so the assistant can open the waiting
+    // display and enable sound from the reception desktop. The key only opens the read-only display screen.
+    display_key: clean(process.env.DISPLAY_KEY) });
 });
