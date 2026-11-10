@@ -480,7 +480,7 @@ export default function Reception({ clinic }: { clinic: string }) {
                 open={menu === e.id} setOpen={(o: boolean) => setMenu(o ? e.id : null)} act={act}
                 askNumber={() => setDialog({ type: 'number', entry: e })}
                 confirm={(text: string, run: () => void) => setDialog({ type: 'confirm', text, run })}
-                linkBooking={() => setLinkFor(e)}
+                linkBooking={() => setLinkFor(e)} hasFeed={(data.bookings?.length ?? 0) > 0}
                 unlinkBooking={async () => { await fetch('/api/booking-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, entry_id: e.id, unlink: true }) }); load(); }} />
             ))}
           </div>
@@ -504,7 +504,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   );
 }
 
-function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking }: any) {
+function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking, hasFeed }: any) {
   const st = e.status as Status;
   const primary: [string, string, any?][] = [];
   if (st === 'booked') primary.push(['checkin', 'تسجيل وصول']);
@@ -551,6 +551,9 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
           {e.booked_time && <span className="chip bg-indigo-600 font-bold text-white" title={e.booked_name ? `محجوز باسم: ${e.booked_name}` : 'له حجز إلكتروني اليوم'}>
             📅 محجوز {e.booked_time}{e.booked_serial ? <span className="num"> · #{N(e.booked_serial)}</span> : null}</span>}
           {e.booked_name && <span className="text-xs text-indigo-700">(باسم {e.booked_name})</span>}
+          {hasFeed && !e.booked_time && !['done', 'cancelled'].includes(st) && (
+            <button onClick={linkBooking} className="chip bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700"
+              title="لا يوجد حجز إلكتروني بنفس الكود – اضغط للربط بحجز باسم آخر">بدون حجز · ربط؟</button>)}
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
           <span className="num">{fmtTime12(e.appt_time, lang)}</span>
