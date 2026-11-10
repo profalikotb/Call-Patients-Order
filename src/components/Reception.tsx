@@ -641,8 +641,8 @@ function BookingsGuide({ list, ar }: { list: any[]; ar: boolean }) {
       {open && (<>
         <div className="sticky top-0 z-10 space-y-2 border-b border-slate-100 bg-white/95 px-3 py-2 backdrop-blur">
           <div className="flex gap-1.5 text-[11px]">
-            <span className="flex-1 rounded-lg bg-emerald-50 px-2 py-1 text-center font-semibold text-emerald-700">✓ مسجل <b className="num">{nCode}</b></span>
-            <span className="flex-1 rounded-lg bg-amber-50 px-2 py-1 text-center font-semibold text-amber-700">↔ باسم آخر <b className="num">{nLink}</b></span>
+            <span className="flex-1 rounded-lg bg-emerald-700 px-2 py-1 text-center font-bold text-white">✓ مسجل <b className="num">{nCode}</b></span>
+            <span className="flex-1 rounded-lg bg-amber-400 px-2 py-1 text-center font-bold text-black">↔ باسم آخر <b className="num">{nLink}</b></span>
             <span className="flex-1 rounded-lg bg-slate-50 px-2 py-1 text-center font-semibold text-slate-600">⏳ لم يصل <b className="num">{nNot}</b></span>
           </div>
           <div className="flex gap-1 rounded-xl bg-slate-50 p-1">
@@ -654,28 +654,31 @@ function BookingsGuide({ list, ar }: { list: any[]; ar: boolean }) {
         <ul className="space-y-1.5 p-2">
           {shown.map((b) => {
             const late = !b.match && mins(b.time) < now - 15;            // booked time passed 15 min ago, not arrived
-            const tone = b.match === 'code' ? 'bg-emerald-50 ring-emerald-200' : b.match === 'link' ? 'bg-amber-50 ring-amber-200' : 'bg-white ring-slate-200';
+            // dark green + bold white = recorded · dark yellow + bold black = another name · white = not arrived
+            const tone = b.match === 'code' ? 'bg-emerald-700 ring-emerald-800 text-white' : b.match === 'link' ? 'bg-amber-400 ring-amber-500 text-black' : 'bg-white ring-slate-200 text-ink-900';
+            const dark = !!b.match;
+            const sub = b.match === 'code' ? 'text-white/80' : b.match === 'link' ? 'text-black/70' : 'text-slate-400';
             const kashf = /كشف/.test(b.procedure);
             return (
               <li key={b.serial} className={`rounded-xl px-3 py-2 ring-1 ${tone}`}>
                 <div className="flex items-center gap-2">
-                  <span className="num w-7 shrink-0 text-center text-xs font-bold text-slate-400">#{b.serial}</span>
-                  <span className={`num shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold ${late ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`} dir="ltr">
+                  <span className={`num w-7 shrink-0 text-center text-xs font-bold ${sub}`}>#{b.serial}</span>
+                  <span className={`num shrink-0 rounded-md px-1.5 py-0.5 text-xs font-black ${late ? 'bg-rose-100 text-rose-700' : dark ? 'bg-black/15' : 'bg-slate-100 text-slate-700'}`} dir="ltr">
                     {String(b.time).replace(/:00(?=\s*[ap]m)/i, '').toUpperCase()}</span>
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-ink-900">{b.name}</span>
-                  <span className="shrink-0 text-base">{b.match === 'code' ? <span className="text-emerald-600">✓</span> : b.match === 'link' ? <span className="text-amber-600">↔</span> : <span className="text-slate-300">○</span>}</span>
+                  <span className={`min-w-0 flex-1 truncate text-[13px] ${dark ? 'font-black' : 'font-bold'}`}>{b.name}</span>
+                  <span className="shrink-0 text-base font-black">{b.match === 'code' ? '✓' : b.match === 'link' ? '↔' : <span className="text-slate-300">○</span>}</span>
                 </div>
                 <div className="mt-1 flex items-center gap-1.5 ps-9 text-[11px]">
-                  <span className={`rounded-full px-2 py-px font-semibold ${kashf ? 'bg-teal-100 text-teal-800' : 'bg-violet-100 text-violet-800'}`}>{b.procedure || '—'}</span>
-                  {/^\d+$/.test(b.code) ? <span className="num rounded-full bg-blue-100 px-2 py-px font-bold text-blue-800" dir="ltr">{b.code}</span>
-                    : b.code ? <span className="rounded-full bg-slate-100 px-2 py-px text-slate-500">{b.code}</span> : null}
-                  {b.match === 'link' && b.linked_to && <span className="truncate text-amber-700">← {b.linked_to}</span>}
+                  <span className={`rounded-full px-2 py-px font-bold ${dark ? 'bg-black/15' : kashf ? 'bg-teal-100 text-teal-800' : 'bg-violet-100 text-violet-800'}`}>{b.procedure || '—'}</span>
+                  {/^\d+$/.test(b.code) ? <span className={`num rounded-full px-2 py-px font-black ${dark ? 'bg-black/15' : 'bg-blue-100 text-blue-800'}`} dir="ltr">{b.code}</span>
+                    : b.code ? <span className={`rounded-full px-2 py-px ${dark ? 'bg-black/10' : 'bg-slate-100 text-slate-500'}`}>{b.code}</span> : null}
+                  {b.match === 'link' && b.linked_to && <span className="truncate font-black">← {b.linked_to}</span>}
                   <span className="ms-auto flex items-center gap-1">
                     {b.phone ? (<>
-                      <button onClick={() => copy(b)} className="num rounded-md px-1.5 py-0.5 text-slate-600 hover:bg-slate-100" dir="ltr" title="نسخ الرقم">
+                      <button onClick={() => copy(b)} className={`num rounded-md px-1.5 py-0.5 font-bold ${dark ? 'hover:bg-black/15' : 'text-slate-600 hover:bg-slate-100'}`} dir="ltr" title="نسخ الرقم">
                         {copied === b.serial ? '✓ تم النسخ' : b.phone.replace(/^20/, '0')}</button>
                       <a href={`https://wa.me/${b.phone}`} target="_blank" rel="noreferrer" className="rounded-md bg-emerald-500 px-1.5 py-0.5 font-bold text-white hover:bg-emerald-600" title="واتساب">WA</a>
-                    </>) : <span className="text-slate-300">—</span>}
+                    </>) : <span className={sub}>—</span>}
                   </span>
                 </div>
               </li>);
