@@ -12,7 +12,7 @@ function LoginInner() {
     e.preventDefault(); setBusy(true); setErr('');
     try {
       const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
-      if (res.ok) { r.replace(q.get('next') || '/'); return; }
+      if (res.ok) { const n = q.get('next') || '/'; r.replace(n.startsWith('/') && !n.startsWith('//') ? n : '/'); return; }
       const j = await res.json().catch(() => ({} as any));
       // 401 = wrong username/password; anything else = server configuration problem → show the real reason
       if (res.status === 401) setErr(t('badLogin'));

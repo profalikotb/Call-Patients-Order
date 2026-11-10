@@ -185,6 +185,12 @@ export default function Reception({ clinic }: { clinic: string }) {
     });
   }, [entries, filter, q]);
 
+  /** Ends this device's session and returns to the login page; after signing in (assistant or admin) it comes straight back here. */
+  async function signOut() {
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* offline: cookie still cleared on next login */ }
+    location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
+  }
+
   if (!data) return <div className="grid min-h-dvh place-items-center text-slate-500">{loadErr || '…'}</div>;
   const s = data.stats;
   const SL = ar ? STATUS_AR : STATUS_EN;
@@ -207,6 +213,15 @@ export default function Reception({ clinic }: { clinic: string }) {
             <span className={`chip ${data.display?.audio_ready ? 'bg-emerald-500/20 text-emerald-200' : 'bg-rose-500/30 text-rose-100'}`}
               title={data.display?.audio_device_label ?? ''}>🔊 {data.display?.audio_ready ? t('audioReady') : t('audioOff')}</span>
             <button onClick={toggle} className="chip bg-white/10">{ar ? 'EN' : 'ع'}</button>
+            <button
+              onClick={() => setDialog({ type: 'confirm', text: ar ? 'تسجيل الخروج من لوحة الاستقبال؟ يمكن الدخول مرة أخرى بحساب المساعد أو المدير.' : 'Sign out of reception? Sign back in as assistant or admin.', run: signOut })}
+              className="chip gap-1 bg-rose-500/25 text-rose-100 hover:bg-rose-500/40"
+              title={t('logout')} aria-label={t('logout')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="rtl:-scale-x-100">
+                <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 16l-4-4 4-4" /><path d="M6 12h10" />
+              </svg>
+              {t('logout')}
+            </button>
           </div>
         </div>
         {data.day?.paused && <div className="bg-amber-500 py-1 text-center text-xs font-bold text-ink-950">{t('paused')}</div>}

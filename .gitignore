@@ -1,0 +1,18 @@
+# dependencies & build output
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+# tests
+coverage/
+playwright-report/
+test-results/
+# env & secrets — never commit
+.env
+.env.*
+!.env.example
+# vercel / os
+.vercel
+.DS_Store
+*.log
