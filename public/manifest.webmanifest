@@ -1,5 +1,5 @@
 {
-  "name": "نظام الدور الذكي – أ.د. على قطب على",
+  "name": "الدور الذكي – أ.د. على قطب على",
   "short_name": "الدور الذكي",
   "description": "Prof. Ali Kotb – Smart Patient Queue System",
   "start_url": "/",
@@ -11,8 +11,68 @@
   "background_color": "#07111f",
   "theme_color": "#0b1a2e",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "/",
+  "shortcuts": [
+    {
+      "name": "الاستقبال – مصر الجديدة",
+      "short_name": "الاستقبال",
+      "url": "/reception/heliopolis",
+      "icons": [
+        {
+          "src": "/apps/reception-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "الاستقبال – طوخ",
+      "short_name": "استقبال طوخ",
+      "url": "/reception/toukh",
+      "icons": [
+        {
+          "src": "/apps/reception-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "رسائل الطبيب",
+      "short_name": "رسائل الطبيب",
+      "url": "/doctor/heliopolis",
+      "icons": [
+        {
+          "src": "/apps/doctor-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "الإدارة",
+      "short_name": "الإدارة",
+      "url": "/admin",
+      "icons": [
+        {
+          "src": "/apps/admin-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }
