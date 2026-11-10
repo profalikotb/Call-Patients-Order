@@ -15,7 +15,7 @@ export const GET = handle(async (req) => {
   const clinic = clinicParam(new URL(req.url).searchParams.get('clinic'));
   const me = await requireStaff({ clinic });
   const today = await sessionDate(clinic);
-  const [c, settings, entries, day, display, last, blist, msgs] = await Promise.all([
+  const [c, settings, entries, day, display, last, blist, msgs, links] = await Promise.all([
     getClinic(clinic),
     getClinicSettings(clinic),
     db().from('queue_entries').select('*').eq('clinic_id', clinic).eq('service_date', today),
@@ -25,12 +25,15 @@ export const GET = handle(async (req) => {
       .eq('undone', false).neq('action', 'undo').order('id', { ascending: false }).limit(1),
     bookingsList(today),
     listStaffMsgs(clinic),
+    db().from('booking_links').select('*').eq('clinic_id', clinic).eq('service_date', today).then((r) => r.data ?? [], () => []),
   ]);
   if (!c) return json({ ok: false, error: 'unknown_clinic' }, 404);
   if (entries.error) throw entries.error;
   const rows = entries.data ?? [];
   const books = new Map(blist.filter((x) => /^\d+$/.test(x.code)).map((x) => [x.code, x]));
   const oracleCodes = new Set(rows.map((r) => String(r.patient_code ?? '')).filter(Boolean));
+  const linkBy = new Map<string, any>((links as any[]).map((l) => [l.entry_id, l]));
+  const linkedSerials = new Set((links as any[]).map((l) => l.serial).filter(Boolean));
 
   // estimate = mean of real consultation durations today (in_room → done), recent 12, clamped
   const durs = rows.filter((r) => r.done_at && r.in_room_at)
@@ -45,8 +48,13 @@ export const GET = handle(async (req) => {
   const pos = new Map(waiting.map((r, i) => [r.id, i]));
   const list = rows.map((r) => ({ ...r, position: pos.get(r.id) ?? null,
     // online booking with the SAME patient code → WhatsApp number + booked time (Oracle data is not changed)
-    wa_phone: (r.patient_code && books.get(String(r.patient_code))?.phone) || null,
-    booked_time: (r.patient_code && books.get(String(r.patient_code))?.time) || null,
+    // booking: linked by hand (another name / serial) wins, else same patient code
+    ...(() => {
+      const l = linkBy.get(r.id); const bk = r.patient_code ? books.get(String(r.patient_code)) : undefined;
+      if (l) return { wa_phone: l.b_phone || bk?.phone || null, booked_time: l.b_time || null, booked_serial: l.serial ?? null,
+        booked_name: l.b_name && l.b_name !== r.patient_name ? l.b_name : null, booked_via: 'link' };
+      return { wa_phone: bk?.phone || null, booked_time: bk?.time || null, booked_serial: bk?.serial ?? null, booked_name: null, booked_via: bk ? 'code' : null };
+    })(),
     est_wait_min: pos.has(r.id) ? Math.round((pos.get(r.id)! + busy) * avg) : null }))
     .sort((a, b) => (ORDER[a.status] - ORDER[b.status]) ||
       (a.status === 'waiting' ? (a.position ?? 1e9) - (b.position ?? 1e9) : 0) ||
@@ -67,7 +75,7 @@ export const GET = handle(async (req) => {
       audio_device_label: d.audio_device_label, announce: d.announce } : null,
     last_action: last.data?.[0] ?? null,
     // read-only guide: today's online bookings (in_list = same patient code already in Oracle's list)
-    bookings: blist.map((x) => ({ ...x, in_list: oracleCodes.has(x.code) })),
+    bookings: blist.map((x) => ({ ...x, in_list: oracleCodes.has(x.code) || linkedSerials.has(x.serial) })),
     messages: msgs.filter((m: any) => !m.ack_at),            // doctor → assistant, unread
     tts: providersAvailable(), sheet_source: sheetSource(), server_now: Date.now(),
   });

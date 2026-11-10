@@ -19,7 +19,7 @@ const display = async () => (await db.query('select * from display_state where c
 beforeAll(async () => { db = await startDb(); });
 afterAll(async () => { await stopDb(db); });
 beforeEach(async () => {
-  await db.query('truncate queue_entries, queue_days, announcements, audit_log, display_state');
+  await db.query('truncate queue_entries, queue_days, announcements, audit_log, display_state cascade');
   await db.query("update clinic_settings set policy='time' where clinic_id=$1", [T]);
 });
 

@@ -30,7 +30,7 @@ const FIVE = [row('A', '18:00'), row('B', '18:10'), row('C', '18:20'), row('D', 
 beforeAll(async () => { db = await startDb(); });
 afterAll(async () => { await stopDb(db); });
 beforeEach(async () => {
-  await db.query('truncate queue_entries, queue_days, announcements, audit_log, display_state');
+  await db.query('truncate queue_entries, queue_days, announcements, audit_log, display_state cascade');
   await policy(H, 'time'); await policy(T, 'time');
 });
 

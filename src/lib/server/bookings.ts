@@ -3,7 +3,7 @@
 //  • bookingsByCode – exact PATIENT CODE → WhatsApp phone + booked time (Oracle stays the master list)
 import { clean, cleanUrl } from '@/lib/envClean';
 
-export interface Booking { code: string; phone: string; time: string; procedure: string; name: string }
+export interface Booking { serial: number; code: string; phone: string; time: string; procedure: string; name: string }
 const cache = new Map<string, { at: number; list: Booking[] }>();
 
 export async function bookingsList(date: string): Promise<Booking[]> {
@@ -17,9 +17,10 @@ export async function bookingsList(date: string): Promise<Booking[]> {
     const j: any = await r.json();
     if (!j?.ok) return hit?.list ?? [];
     const list: Booking[] = (j.rows ?? []).map((x: any) => ({
-      code: String(x.code ?? '').trim(), phone: String(x.phone || ''), time: String(x.time || ''),
+      serial: 0, code: String(x.code ?? '').trim(), phone: String(x.phone || ''), time: String(x.time || ''),
       procedure: String(x.procedure || ''), name: String(x.name || '') }));
     list.sort((a, b) => minutes(a.time) - minutes(b.time));
+    list.forEach((b, i) => { b.serial = i + 1; });                     // «#» as on the booking page
     cache.set(date, { at: Date.now(), list });
     return list;
   } catch {

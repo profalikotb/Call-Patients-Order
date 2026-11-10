@@ -45,6 +45,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   const [menu, setMenu] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | { type: 'walkin' } | { type: 'number'; entry: Entry } | { type: 'confirm'; text: string; run: () => void }>(null);
   const [wa, setWa] = useState<null | { phone: string; name: string }>(null);      // quick WhatsApp box
+  const [linkFor, setLinkFor] = useState<Entry | null>(null);                        // «📅 ربط بحجز» dialog
   // push mode: clinic PCs that send the list, and which PC THIS browser belongs to
   const [pcs, setPcs] = useState<{ owner: string | null; pinned: boolean; ownerAgo: number | null; sources: any[] } | null>(null);
   const [thisPc, setThisPc] = useState<string>('');
@@ -478,7 +479,9 @@ export default function Reception({ clinic }: { clinic: string }) {
               <Row key={e.id} e={e} N={N} ar={ar} lang={lang} SL={SL} isCurrent={e.id === current?.id} busy={busy} policy={data.policy}
                 open={menu === e.id} setOpen={(o: boolean) => setMenu(o ? e.id : null)} act={act}
                 askNumber={() => setDialog({ type: 'number', entry: e })}
-                confirm={(text: string, run: () => void) => setDialog({ type: 'confirm', text, run })} />
+                confirm={(text: string, run: () => void) => setDialog({ type: 'confirm', text, run })}
+                linkBooking={() => setLinkFor(e)}
+                unlinkBooking={async () => { await fetch('/api/booking-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, entry_id: e.id, unlink: true }) }); load(); }} />
             ))}
           </div>
         </section>
@@ -494,12 +497,14 @@ export default function Reception({ clinic }: { clinic: string }) {
 
       {dialog && <Dialog dialog={dialog} close={() => setDialog(null)} act={act} policy={data.policy} />}
       <DoctorMessages clinic={clinic} msgs={data.messages ?? []} reload={load} />
+      {linkFor && <BookingLinkDialog clinic={clinic} entry={linkFor} bookings={data.bookings ?? []} close={() => setLinkFor(null)}
+        done={(msg: string) => { setLinkFor(null); flash(msg); load(); }} />}
       {wa && <WhatsAppBox init={wa} clinicName={data.clinic.name_ar} room={data.room_label} close={() => setWa(null)} />}
     </div>
   );
 }
 
-function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm }: any) {
+function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking }: any) {
   const st = e.status as Status;
   const primary: [string, string, any?][] = [];
   if (st === 'booked') primary.push(['checkin', 'تسجيل وصول']);
@@ -518,9 +523,13 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
   if (['waiting', 'called', 'absent', 'booked'].includes(st)) more.push(['postpone', 'تأجيل']);
   if (['waiting', 'booked'].includes(st) || policy === 'manual') more.push(['__number', 'تعيين رقم الدور']);
   if (!['done', 'cancelled'].includes(st)) more.push(['cancel', 'إلغاء الحجز']);
+  more.push(['__link', e.booked_via === 'link' ? '📅 تغيير الحجز الإلكتروني المرتبط' : '📅 ربط بحجز إلكتروني (باسم آخر)']);
+  if (e.booked_via === 'link') more.push(['__unlink', 'إلغاء ربط الحجز']);
 
   const run = ([a, , args]: [string, string, any?]) => {
     if (a === '__number') return askNumber();
+    if (a === '__link') return linkBooking();
+    if (a === '__unlink') return confirm(`إلغاء ربط ${e.patient_name} بالحجز الإلكتروني؟`, unlinkBooking);
     if (a === 'cancel') return confirm(`إلغاء دور ${e.patient_name}؟`, () => act('cancel', e.id));
     act(a, e.id, args ?? {});
   };
@@ -539,12 +548,14 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
           {e.priority && <span className="chip bg-rose-600 text-white">طارئ</span>}
           {e.source === 'walkin' && <span className="chip bg-teal-50 text-teal-700">بدون حجز</span>}
           {e.dup_hint && <span className="chip bg-amber-100 text-amber-800" title={`حجز آخر اليوم: ${e.dup_hint}`}>⚠ مكرر</span>}
+          {e.booked_time && <span className="chip bg-indigo-600 font-bold text-white" title={e.booked_name ? `محجوز باسم: ${e.booked_name}` : 'له حجز إلكتروني اليوم'}>
+            📅 محجوز {e.booked_time}{e.booked_serial ? <span className="num"> · #{N(e.booked_serial)}</span> : null}</span>}
+          {e.booked_name && <span className="text-xs text-indigo-700">(باسم {e.booked_name})</span>}
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
           <span className="num">{fmtTime12(e.appt_time, lang)}</span>
           {e.procedure && <span>{e.procedure}</span>}
           {!e.patient_code && e.booking_id && <span className="num" dir="ltr">#{e.booking_id}</span>}
-          {e.booked_time && <span className="font-semibold text-indigo-700" title={ar ? 'موعد الحجز الإلكتروني' : 'online booking time'}>🕐 {e.booked_time}</span>}
           {e.wa_phone
             ? <a className="num font-semibold text-emerald-700" dir="ltr" href={`https://wa.me/${e.wa_phone}`} target="_blank" rel="noreferrer" title={ar ? 'واتساب من الحجز الإلكتروني' : 'WhatsApp from online booking'}>🟢 {e.wa_phone.replace(/^20/, '0')}</a>
             : e.phone && <a className="num text-sky-700" dir="ltr" href={`https://wa.me/2${e.phone}`} target="_blank" rel="noreferrer">{e.phone}</a>}
@@ -786,6 +797,53 @@ function DoctorMessages({ clinic, msgs, reload }: { clinic: string; msgs: any[];
           {m.audio_path && <button onClick={() => play(m)} className="rounded-xl bg-white/20 px-4 py-2 text-lg font-black">▶</button>}
           <button onClick={() => ack(m.id)} autoFocus className="rounded-2xl bg-white px-8 py-5 text-3xl font-black text-rose-700 shadow-xl hover:bg-yellow-100">تم ✓</button>
         </div>))}
+    </div>
+  );
+}
+
+// «📅 ربط بحجز»: choose the online booking (any name) this patient came on – from the list, or typed by hand
+function BookingLinkDialog({ clinic, entry, bookings, close, done }: { clinic: string; entry: Entry; bookings: any[]; close: () => void; done: (m: string) => void }) {
+  const [q, setQ] = useState('');
+  const [serial, setSerial] = useState(''); const [time, setTime] = useState(''); const [name, setName] = useState(''); const [phone, setPhone] = useState('');
+  const [err, setErr] = useState('');
+  const nq = normalizeAr(toWesternDigits(q));
+  const list = bookings.filter((b) => !nq || String(b.serial) === nq || normalizeAr(b.name).includes(nq) || String(b.phone).includes(nq) || String(b.code).includes(nq));
+  const save = async (body: any) => {
+    setErr('');
+    const j = await (await fetch('/api/booking-link', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clinic, entry_id: entry.id, ...body }) })).json().catch(() => ({ ok: false, error: 'network' }));
+    if (j.ok) done(`تم ربط ${entry.patient_name} بحجز ${j.link?.b_time ?? ''}`); else setErr(String(j.detail || j.error));
+  };
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink-950/50 p-3" onClick={close}>
+      <div className="card flex max-h-[90dvh] w-full max-w-lg flex-col p-5" onClick={(ev) => ev.stopPropagation()} dir="rtl">
+        <h3 className="font-bold">📅 ربط «{entry.patient_name}» بحجز إلكتروني</h3>
+        <p className="mb-2 text-xs text-slate-500">اختر الحجز الذي جاء عليه المريض حتى لو باسم آخر (أخ، ابن …).</p>
+        {bookings.length > 0 ? (<>
+          <input className="input mb-2" autoFocus placeholder="بحث برقم الحجز (#) أو الاسم أو التليفون" value={q} onChange={(ev) => setQ(ev.target.value)} />
+          <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto rounded-xl ring-1 ring-slate-200">
+            {list.map((b) => (
+              <button key={b.serial} onClick={() => save({ serial: b.serial })} className={`flex w-full items-center gap-3 px-3 py-2 text-start text-sm hover:bg-indigo-50 ${b.in_list ? 'opacity-50' : ''}`}>
+                <span className="num w-8 shrink-0 font-black text-indigo-700">#{b.serial}</span>
+                <span className="w-16 shrink-0 font-semibold" dir="ltr">{String(b.time).replace(/:00(?=\s*[ap]m)/i, '').toUpperCase()}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold">{b.name}</span>
+                <span className="text-xs text-slate-500">{b.in_list ? '✓ مسجل' : b.procedure}</span>
+              </button>))}
+          </div>
+        </>) : (
+          <div className="space-y-2">
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">اكتب البيانات من نافذة «📅 جدول الحجز»:</p>
+            <div className="grid grid-cols-2 gap-2">
+              <input className="input num" dir="ltr" autoFocus placeholder="رقم الحجز #" value={serial} onChange={(ev) => setSerial(ev.target.value)} />
+              <input className="input" dir="ltr" placeholder="الوقت مثل 8:30 PM" value={time} onChange={(ev) => setTime(ev.target.value)} />
+            </div>
+            <input className="input" placeholder="محجوز باسم (مثل حسين علي)" value={name} onChange={(ev) => setName(ev.target.value)} />
+            <input className="input num" dir="ltr" placeholder="رقم الواتساب في الحجز (اختياري)" value={phone} onChange={(ev) => setPhone(ev.target.value)} />
+            <button className="btn-primary w-full" onClick={() => save({ serial: toWesternDigits(serial), time: time.toUpperCase(), name, phone: toWesternDigits(phone) })}>ربط</button>
+          </div>)}
+        {err && <p className="mt-2 text-sm text-rose-600">{err}</p>}
+        <button className="btn-ghost mt-3" onClick={close}>إغلاق</button>
+      </div>
     </div>
   );
 }
