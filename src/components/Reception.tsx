@@ -49,6 +49,11 @@ export default function Reception({ clinic }: { clinic: string }) {
   const [pcs, setPcs] = useState<{ owner: string | null; pinned: boolean; ownerAgo: number | null; sources: any[] } | null>(null);
   const [thisPc, setThisPc] = useState<string>('');
   useEffect(() => { try { setThisPc(localStorage.getItem('queue.thisPc') || ''); } catch {} }, []);
+  // TV link needs the display key, which the server only gives to admins (same rule as the home launcher).
+  const [tvKey, setTvKey] = useState('');
+  useEffect(() => {
+    fetch('/api/clinics', { cache: 'no-store' }).then((r) => r.json()).then((j) => setTvKey(j?.display_key || '')).catch(() => {});
+  }, []);
   const cooldown = useRef(0);
   const toastTimer = useRef<any>(null);
 
@@ -186,6 +191,13 @@ export default function Reception({ clinic }: { clinic: string }) {
   }, [entries, filter, q]);
 
   /** Ends this device's session and returns to the login page; after signing in (assistant or admin) it comes straight back here. */
+  /** Opens (or focuses) this clinic's waiting display with sound; one named window, so repeated taps don't stack tabs. */
+  function openTv() {
+    if (!tvKey) return;
+    const label = `شاشة ${data?.clinic?.name_ar ?? ''}`.trim();
+    window.open(`/display/${clinic}?k=${encodeURIComponent(tvKey)}&label=${encodeURIComponent(label)}&auto=1`, `pq_tv_${clinic}`);
+  }
+
   async function signOut() {
     try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* offline: cookie still cleared on next login */ }
     location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
@@ -210,8 +222,13 @@ export default function Reception({ clinic }: { clinic: string }) {
               ● {t('sheet')} {lastOk ? `· ${fmtTs12(lastOk, lang)}` : ''} {data.sheet_source !== 'google' ? `(${data.sheet_source})` : ''}
             </span>
             <span className={`chip ${live && online ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-500/30 text-amber-100'}`}>● {online ? t('live') : t('offline')}</span>
-            <span className={`chip ${data.display?.audio_ready ? 'bg-emerald-500/20 text-emerald-200' : 'bg-rose-500/30 text-rose-100'}`}
-              title={data.display?.audio_device_label ?? ''}>🔊 {data.display?.audio_ready ? t('audioReady') : t('audioOff')}</span>
+            {tvKey ? (
+              <button onClick={openTv} className={`chip ${data.display?.audio_ready ? 'bg-emerald-500/20 text-emerald-200' : 'bg-rose-500/30 text-rose-100 animate-pulse'}`}
+                title={`${data.display?.audio_device_label ?? ''} — ${ar ? 'فتح شاشة الانتظار لتفعيل الصوت' : 'open waiting display to enable sound'}`}>🔊 {data.display?.audio_ready ? t('audioReady') : t('audioOff')}</button>
+            ) : (
+              <span className={`chip ${data.display?.audio_ready ? 'bg-emerald-500/20 text-emerald-200' : 'bg-rose-500/30 text-rose-100'}`}
+                title={data.display?.audio_device_label ?? ''}>🔊 {data.display?.audio_ready ? t('audioReady') : t('audioOff')}</span>
+            )}
             <button onClick={toggle} className="chip bg-white/10">{ar ? 'EN' : 'ع'}</button>
             <button
               onClick={() => setDialog({ type: 'confirm', text: ar ? 'تسجيل الخروج من لوحة الاستقبال؟ يمكن الدخول مرة أخرى بحساب المساعد أو المدير.' : 'Sign out of reception? Sign back in as assistant or admin.', run: signOut })}
@@ -328,6 +345,15 @@ export default function Reception({ clinic }: { clinic: string }) {
             title={ar ? 'يفتح جدول الحجز في نافذة على يسار الشاشة' : 'opens the booking page on the left'}>📅 {ar ? 'جدول الحجز' : 'Bookings'}</button>}
           <a className="btn-ghost" href={`/doctor/${clinic}`} target="pq_doctor" title={ar ? 'لوحة رسائل الطبيب للمساعد' : 'doctor → assistant'}>🩺 {ar ? 'رسائل الطبيب' : 'Doctor pad'}</a>
           <button className="btn-ghost" onClick={() => setWa({ phone: '', name: '' })} title={ar ? 'انسخ الرقم من جدول الحجز والصقه هنا' : 'paste a number'}>💬 {ar ? 'واتساب' : 'WhatsApp'}</button>
+          {tvKey && (
+            <button onClick={openTv}
+              className={`btn-ghost gap-2 ${data.display?.audio_ready ? '' : 'ring-2 ring-rose-400 bg-rose-50 text-rose-800'}`}
+              title={ar ? 'يفتح شاشة الانتظار (التلفزيون) — اضغط عليها مرة لتفعيل الصوت' : 'opens the TV waiting display — click it once to enable sound'}>
+              <img src="/apps/display-192.png" alt="" className="h-6 w-6 rounded-md" />
+              <span className="text-start leading-tight">{ar ? 'شاشة الانتظار' : 'Waiting display'}
+                <span className="block text-[10px] font-normal text-slate-500">{data.display?.audio_ready ? (ar ? 'الصوت مفعّل' : 'sound on') : (ar ? 'التلفزيون – بالصوت' : 'TV – with sound')}</span></span>
+            </button>
+          )}
           <span className="ms-auto self-center text-xs text-slate-400">
             {data.policy === 'time' ? 'ترتيب حسب الموعد' : data.policy === 'checkin' ? 'ترتيب حسب الوصول' : 'أرقام يدوية'}
           </span>
