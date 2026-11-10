@@ -481,11 +481,12 @@ export default function Reception({ clinic }: { clinic: string }) {
                 askNumber={() => setDialog({ type: 'number', entry: e })}
                 confirm={(text: string, run: () => void) => setDialog({ type: 'confirm', text, run })}
                 linkBooking={() => setLinkFor(e)} hasFeed={(data.bookings?.length ?? 0) > 0}
+                whatsApp={(phone: string) => setWa({ phone, name: e.patient_name ?? '' })}
                 unlinkBooking={async () => { await fetch('/api/booking-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, entry_id: e.id, unlink: true }) }); load(); }} />
             ))}
           </div>
         </section>
-          {data.bookings?.length > 0 && <BookingsGuide list={data.bookings} ar={ar} />}
+          {data.bookings?.length > 0 && <BookingsGuide list={data.bookings} ar={ar} onWhatsApp={(phone: string, name: string) => setWa({ phone, name })} />}
         </div>
       </main>
 
@@ -504,7 +505,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   );
 }
 
-function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking, hasFeed }: any) {
+function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking, hasFeed, whatsApp }: any) {
   const st = e.status as Status;
   const primary: [string, string, any?][] = [];
   if (st === 'booked') primary.push(['checkin', 'تسجيل وصول']);
@@ -560,8 +561,8 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
           {e.procedure && <span>{e.procedure}</span>}
           {!e.patient_code && e.booking_id && <span className="num" dir="ltr">#{e.booking_id}</span>}
           {e.wa_phone
-            ? <a className="num font-semibold text-emerald-700" dir="ltr" href={`https://wa.me/${e.wa_phone}`} target="_blank" rel="noreferrer" title={ar ? 'واتساب من الحجز الإلكتروني' : 'WhatsApp from online booking'}>🟢 {e.wa_phone.replace(/^20/, '0')}</a>
-            : e.phone && <a className="num text-sky-700" dir="ltr" href={`https://wa.me/2${e.phone}`} target="_blank" rel="noreferrer">{e.phone}</a>}
+            ? <button className="num font-semibold text-emerald-700 hover:underline" dir="ltr" onClick={() => whatsApp(e.wa_phone)} title={ar ? 'واتساب برسالة جاهزة (رقم الحجز الإلكتروني)' : 'WhatsApp'}>🟢 {e.wa_phone.replace(/^20/, '0')}</button>
+            : e.phone && <button className="num text-sky-700 hover:underline" dir="ltr" onClick={() => whatsApp(e.phone)} title={ar ? 'واتساب برسالة جاهزة' : 'WhatsApp'}>{e.phone}</button>}
           {st === 'waiting' && (() => { const m = Math.max(0, Math.round((Date.now() - new Date(e.checked_in_at ?? e.created_at).getTime()) / 60000));
             return m > 0 ? <span className={m >= 60 ? 'font-semibold text-rose-600' : 'text-slate-500'}>⏱ {ar ? 'ينتظر' : 'waiting'} {N(m)} د</span> : null; })()}
           {e.est_wait_min !== null && <span className="text-violet-700">≈ {N(e.est_wait_min)} د ({ar ? 'تقديري' : 'est.'})</span>}
@@ -619,7 +620,7 @@ function Dialog({ dialog, close, act, policy }: any) {
 //   green  = recorded in Oracle's list (same patient code)
 //   yellow = came under another name (linked by hand)
 //   white  = not arrived / not entered yet
-function BookingsGuide({ list, ar }: { list: any[]; ar: boolean }) {
+function BookingsGuide({ list, ar, onWhatsApp }: { list: any[]; ar: boolean; onWhatsApp: (phone: string, name: string) => void }) {
   const [open, setOpen] = useState(true);
   const [f, setF] = useState<'all' | 'waiting' | 'in'>('all');
   const [copied, setCopied] = useState<number | null>(null);
@@ -677,7 +678,7 @@ function BookingsGuide({ list, ar }: { list: any[]; ar: boolean }) {
                     {b.phone ? (<>
                       <button onClick={() => copy(b)} className={`num rounded-md px-1.5 py-0.5 font-bold ${dark ? 'hover:bg-black/15' : 'text-slate-600 hover:bg-slate-100'}`} dir="ltr" title="نسخ الرقم">
                         {copied === b.serial ? '✓ تم النسخ' : b.phone.replace(/^20/, '0')}</button>
-                      <a href={`https://wa.me/${b.phone}`} target="_blank" rel="noreferrer" className="rounded-md bg-emerald-500 px-1.5 py-0.5 font-bold text-white hover:bg-emerald-600" title="واتساب">WA</a>
+                      <button onClick={() => onWhatsApp(b.phone, b.name)} className="rounded-md bg-emerald-500 px-1.5 py-0.5 font-bold text-white hover:bg-emerald-600" title="واتساب برسالة جاهزة">WA</button>
                     </>) : <span className={sub}>—</span>}
                   </span>
                 </div>
@@ -736,6 +737,8 @@ function WhatsAppBox({ init, clinicName, room, close }: { init: { phone: string;
   const [ti, setTi] = useState(0);
   const [text, setText] = useState('');
   useEffect(() => { setText(WA_TEMPLATES[ti][1](name ? `أ/ ${name}` : '', clinicName, room)); }, [ti, name, clinicName, room]);
+  const [warn, setWarn] = useState('');
+  useEffect(() => { const d = toWesternDigits(init.phone).replace(/\D/g, ''); if (init.phone && !waNumber(init.phone) && d.length) setWarn('هذا رقم أرضي غالباً – لا يعمل على واتساب'); }, [init.phone]);
   useEffect(() => {                       // paste from clipboard automatically if it holds a phone number
     if (init.phone) return;
     navigator.clipboard?.readText?.().then((t) => { if (waNumber(t)) setPhone(t.trim()); }).catch(() => {});
@@ -746,7 +749,7 @@ function WhatsAppBox({ init, clinicName, room, close }: { init: { phone: string;
       <div className="card w-full max-w-md space-y-3 p-5" onClick={(e) => e.stopPropagation()} dir="rtl">
         <h3 className="font-bold">💬 إرسال واتساب</h3>
         <input className="input num" dir="ltr" autoFocus placeholder="01xxxxxxxxx  أو  201xxxxxxxxx" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        <div className={`text-xs ${num ? 'text-emerald-700' : 'text-rose-600'}`}>{num ? `✓ ${num}` : 'الصق الرقم من جدول الحجز (Ctrl+V)'}</div>
+        <div className={`text-xs ${num ? 'text-emerald-700' : 'text-rose-600'}`}>{num ? `✓ ${num}` : warn || 'الصق الرقم من جدول الحجز (Ctrl+V)'}</div>
         <input className="input" placeholder="اسم المريض (اختياري)" value={name} onChange={(e) => setName(e.target.value)} />
         <div className="flex flex-wrap gap-1.5">
           {WA_TEMPLATES.map(([l], i) => (
