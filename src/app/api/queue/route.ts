@@ -33,7 +33,8 @@ export const GET = handle(async (req) => {
   const books = new Map(blist.filter((x) => /^\d+$/.test(x.code)).map((x) => [x.code, x]));
   const oracleCodes = new Set(rows.map((r) => String(r.patient_code ?? '')).filter(Boolean));
   const linkBy = new Map<string, any>((links as any[]).map((l) => [l.entry_id, l]));
-  const linkedSerials = new Set((links as any[]).map((l) => l.serial).filter(Boolean));
+  const linkedTo = new Map<number, string>();                                  // booking serial → patient linked to it
+  for (const l of links as any[]) if (l.serial) linkedTo.set(l.serial, rows.find((r) => r.id === l.entry_id)?.patient_name ?? '');
 
   // estimate = mean of real consultation durations today (in_room → done), recent 12, clamped
   const durs = rows.filter((r) => r.done_at && r.in_room_at)
@@ -75,7 +76,11 @@ export const GET = handle(async (req) => {
       audio_device_label: d.audio_device_label, announce: d.announce } : null,
     last_action: last.data?.[0] ?? null,
     // read-only guide: today's online bookings (in_list = same patient code already in Oracle's list)
-    bookings: blist.map((x) => ({ ...x, in_list: oracleCodes.has(x.code) || linkedSerials.has(x.serial) })),
+    // match: 'code' = same patient code in Oracle's list · 'link' = reserved under another name (linked by hand)
+    bookings: blist.map((x) => {
+      const match = oracleCodes.has(x.code) ? 'code' : linkedTo.has(x.serial) ? 'link' : null;
+      return { ...x, match, in_list: !!match, linked_to: match === 'link' ? linkedTo.get(x.serial) : null };
+    }),
     messages: msgs.filter((m: any) => !m.ack_at),            // doctor → assistant, unread
     tts: providersAvailable(), sheet_source: sheetSource(), server_now: Date.now(),
   });

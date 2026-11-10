@@ -615,41 +615,74 @@ function Dialog({ dialog, close, act, policy }: any) {
   );
 }
 
-// Read-only guide: today's online bookings (AllEvents2025). ✓ = same patient code is already in Oracle's list.
+// Read-only guide: today's online bookings.
+//   green  = recorded in Oracle's list (same patient code)
+//   yellow = came under another name (linked by hand)
+//   white  = not arrived / not entered yet
 function BookingsGuide({ list, ar }: { list: any[]; ar: boolean }) {
   const [open, setOpen] = useState(true);
-  const notIn = list.filter((b) => !b.in_list).length;
+  const [f, setF] = useState<'all' | 'waiting' | 'in'>('all');
+  const [copied, setCopied] = useState<number | null>(null);
+  const nCode = list.filter((b) => b.match === 'code').length;
+  const nLink = list.filter((b) => b.match === 'link').length;
+  const nNot = list.length - nCode - nLink;
+  const shown = list.filter((b) => f === 'all' || (f === 'waiting' ? !b.match : !!b.match));
+  const now = (() => { const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' })); return d.getHours() * 60 + d.getMinutes(); })();
+  const mins = (t: string) => { const m = String(t).match(/(\d{1,2}):(\d{2})/); if (!m) return 1e9; let h = Number(m[1]) % 12; if (/pm/i.test(t)) h += 12; return h * 60 + Number(m[2]); };
+  const copy = (b: any) => { try { navigator.clipboard.writeText(b.phone.replace(/^20/, '0')); setCopied(b.serial); setTimeout(() => setCopied(null), 1500); } catch {} };
+  const tab = (k: typeof f, label: string, n: number, cls: string) => (
+    <button onClick={() => setF(k)} className={`flex-1 rounded-lg px-2 py-1 text-[11px] font-bold transition ${f === k ? cls : 'text-slate-500 hover:bg-slate-100'}`}>{label} <span className="num">{n}</span></button>);
   return (
     <aside className="card sticky top-20 overflow-hidden xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between bg-[#0b3f7a] px-3 py-2 text-sm font-bold text-white">
-        <span>📅 {ar ? 'الحجز الإلكتروني' : 'Online bookings'} <span className="num font-normal opacity-80">({list.length})</span></span>
-        <span className="text-xs font-normal opacity-80">{notIn ? `${notIn} ${ar ? 'غير مسجل في أوراكل' : 'not in Oracle'}` : ''} {open ? '▾' : '▸'}</span>
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between bg-gradient-to-l from-[#0b3f7a] to-[#1d5fa8] px-4 py-2.5 text-white">
+        <span className="text-sm font-bold">📅 {ar ? 'الحجز الإلكتروني' : 'Online bookings'} <span className="num font-normal opacity-80">({list.length})</span></span>
+        <span className="text-xs opacity-80">{open ? '▾' : '▸'}</span>
       </button>
-      {open && (
-        <table className="w-full text-xs">
-          <thead className="bg-slate-100 text-slate-600">
-            <tr><th className="px-2 py-1.5 text-start">{ar ? 'الوقت' : 'Time'}</th><th className="px-2 py-1.5 text-start">{ar ? 'الاسم' : 'Name'}</th>
-              <th className="px-2 py-1.5 text-start">{ar ? 'التليفون' : 'Phone'}</th><th className="px-1 py-1.5"></th></tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {list.map((b, i) => {
-              const kashf = /كشف/.test(b.procedure);
-              return (
-                <tr key={i} className={b.in_list ? 'bg-white' : kashf ? 'bg-[#5b3f37]/10' : 'bg-amber-50'}>
-                  <td className="whitespace-nowrap px-2 py-1.5 font-semibold" dir="ltr">{String(b.time).replace(/:00(?=\s*[ap]m)/i, '').toUpperCase()}</td>
-                  <td className="px-2 py-1.5">
-                    <div className="font-semibold leading-tight">{b.name}</div>
-                    <div className="text-[10px] text-slate-500">{b.procedure}{/^\d+$/.test(b.code) ? <span className="num" dir="ltr"> · {b.code}</span> : b.code ? ` · ${b.code}` : ''}</div>
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-1.5">{b.phone
-                    ? <a className="num text-emerald-700" dir="ltr" href={`https://wa.me/${b.phone}`} target="_blank" rel="noreferrer">{b.phone.replace(/^20/, '0')}</a>
-                    : <span className="text-slate-300">—</span>}</td>
-                  <td className="px-1 text-center" title={b.in_list ? (ar ? 'موجود في قائمة أوراكل' : 'in Oracle list') : (ar ? 'غير موجود في قائمة أوراكل' : 'not in Oracle list')}>
-                    {b.in_list ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">●</span>}</td>
-                </tr>);
-            })}
-          </tbody>
-        </table>)}
+      {open && (<>
+        <div className="sticky top-0 z-10 space-y-2 border-b border-slate-100 bg-white/95 px-3 py-2 backdrop-blur">
+          <div className="flex gap-1.5 text-[11px]">
+            <span className="flex-1 rounded-lg bg-emerald-50 px-2 py-1 text-center font-semibold text-emerald-700">✓ مسجل <b className="num">{nCode}</b></span>
+            <span className="flex-1 rounded-lg bg-amber-50 px-2 py-1 text-center font-semibold text-amber-700">↔ باسم آخر <b className="num">{nLink}</b></span>
+            <span className="flex-1 rounded-lg bg-slate-50 px-2 py-1 text-center font-semibold text-slate-600">⏳ لم يصل <b className="num">{nNot}</b></span>
+          </div>
+          <div className="flex gap-1 rounded-xl bg-slate-50 p-1">
+            {tab('all', 'الكل', list.length, 'bg-white text-ink-900 shadow-sm')}
+            {tab('waiting', 'لم يصل', nNot, 'bg-white text-slate-700 shadow-sm')}
+            {tab('in', 'وصل', nCode + nLink, 'bg-white text-emerald-700 shadow-sm')}
+          </div>
+        </div>
+        <ul className="space-y-1.5 p-2">
+          {shown.map((b) => {
+            const late = !b.match && mins(b.time) < now - 15;            // booked time passed 15 min ago, not arrived
+            const tone = b.match === 'code' ? 'bg-emerald-50 ring-emerald-200' : b.match === 'link' ? 'bg-amber-50 ring-amber-200' : 'bg-white ring-slate-200';
+            const kashf = /كشف/.test(b.procedure);
+            return (
+              <li key={b.serial} className={`rounded-xl px-3 py-2 ring-1 ${tone}`}>
+                <div className="flex items-center gap-2">
+                  <span className="num w-7 shrink-0 text-center text-xs font-bold text-slate-400">#{b.serial}</span>
+                  <span className={`num shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold ${late ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`} dir="ltr">
+                    {String(b.time).replace(/:00(?=\s*[ap]m)/i, '').toUpperCase()}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-ink-900">{b.name}</span>
+                  <span className="shrink-0 text-base">{b.match === 'code' ? <span className="text-emerald-600">✓</span> : b.match === 'link' ? <span className="text-amber-600">↔</span> : <span className="text-slate-300">○</span>}</span>
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 ps-9 text-[11px]">
+                  <span className={`rounded-full px-2 py-px font-semibold ${kashf ? 'bg-teal-100 text-teal-800' : 'bg-violet-100 text-violet-800'}`}>{b.procedure || '—'}</span>
+                  {/^\d+$/.test(b.code) ? <span className="num rounded-full bg-blue-100 px-2 py-px font-bold text-blue-800" dir="ltr">{b.code}</span>
+                    : b.code ? <span className="rounded-full bg-slate-100 px-2 py-px text-slate-500">{b.code}</span> : null}
+                  {b.match === 'link' && b.linked_to && <span className="truncate text-amber-700">← {b.linked_to}</span>}
+                  <span className="ms-auto flex items-center gap-1">
+                    {b.phone ? (<>
+                      <button onClick={() => copy(b)} className="num rounded-md px-1.5 py-0.5 text-slate-600 hover:bg-slate-100" dir="ltr" title="نسخ الرقم">
+                        {copied === b.serial ? '✓ تم النسخ' : b.phone.replace(/^20/, '0')}</button>
+                      <a href={`https://wa.me/${b.phone}`} target="_blank" rel="noreferrer" className="rounded-md bg-emerald-500 px-1.5 py-0.5 font-bold text-white hover:bg-emerald-600" title="واتساب">WA</a>
+                    </>) : <span className="text-slate-300">—</span>}
+                  </span>
+                </div>
+              </li>);
+          })}
+          {!shown.length && <li className="py-6 text-center text-xs text-slate-400">لا يوجد</li>}
+        </ul>
+      </>)}
     </aside>
   );
 }
