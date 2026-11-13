@@ -10,9 +10,12 @@ export function toWesternDigits(s: string): string {
   });
 }
 
+/** Display digits on every screen. Clinic choice: always 0-9 (123), never ١٢٣ – the name is kept for the call sites.
+ *  Set USE_INDIC_DIGITS = true to bring back ١٢٣. */
+const USE_INDIC_DIGITS = false;
 export function toArabicDigits(v: number | string | null | undefined): string {
   if (v === null || v === undefined || v === '') return '';
-  return String(v).replace(/[0-9]/g, (d) => AR_INDIC[Number(d)]);
+  return USE_INDIC_DIGITS ? String(v).replace(/[0-9]/g, (d) => AR_INDIC[Number(d)]) : toWesternDigits(String(v));
 }
 
 /** Aggressive normalisation for matching headers, clinic names, keywords, duplicate names. */

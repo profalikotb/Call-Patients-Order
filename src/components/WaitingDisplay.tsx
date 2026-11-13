@@ -262,6 +262,7 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
     try { window.speechSynthesis?.getVoices(); } catch {}
     try { await document.documentElement.requestFullscreen?.(); } catch {}
     unlockedRef.current = true; setUnlocked(true);
+    try { localStorage.setItem('pq_tv_audio', '1'); } catch {}          // next time: start by itself
     await claim(force);
     refresh();
   }
@@ -269,7 +270,8 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
   // (Edge/Chrome started with --autoplay-policy=no-user-gesture-required, or site Sound = Allow).
   // Takes the sound over from any other screen. Falls back to the normal button otherwise.
   useEffect(() => {
-    if (!auto || unlockedRef.current) return;
+    let remembered = false; try { remembered = localStorage.getItem('pq_tv_audio') === '1'; } catch {}
+    if (!(auto || remembered) || unlockedRef.current) return;
     let cancelled = false;
     const tryAuto = async () => {
       try {
@@ -280,6 +282,11 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
         const b = ctx.current.createBuffer(1, 1, 22050), src = ctx.current.createBufferSource(); src.buffer = b; src.connect(ctx.current.destination); src.start();
         try { window.speechSynthesis?.getVoices(); } catch {}
         unlockedRef.current = true; setUnlocked(true); setAudioNote('');
+        // is the VOICE allowed without a click too? (Edge site setting «Media autoplay: Allow», or the TV .bat flags)
+        try {
+          const ss = window.speechSynthesis;
+          if (ss) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.onstart = () => setSpeechReady(true); u.onend = () => setSpeechReady(true); ss.speak(u); }
+        } catch {}
         await claim(true);
         refresh();
       } catch { /* keep the manual button */ }
