@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useLang } from '@/lib/i18n';
 import { watchDisplay } from '@/lib/supabaseBrowser';
@@ -464,10 +464,22 @@ export default function Reception({ clinic }: { clinic: string }) {
               {(['active', 'waiting', 'called', 'in_room', 'absent', 'postponed', 'done', 'cancelled', 'all'] as const).map((f) => {
                 const c = f === 'active' ? s.total - s.done - s.cancelled : f === 'all' ? s.total : s[f];
                 return (
-                  <button key={f} onClick={() => setFilter(f as any)}
+                  <Fragment key={f}>
+                  <button onClick={() => setFilter(f as any)}
                     className={`chip px-3 py-1.5 ${filter === f ? 'bg-ink-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
                     {f === 'active' ? (ar ? 'الحاليون' : 'Active') : f === 'all' ? t('all') : SL[f as Status]}{data.role === 'admin' && <span className="num opacity-70"> {N(c)}</span>}
-                  </button>);
+                  </button>
+                  {/* beside «الحاليون»: how many كشف / استشارة among the current patients (admin only, like the other counts) */}
+                  {f === 'active' && data.role === 'admin' && (() => {
+                    const cur = entries.filter((e) => !['done', 'cancelled'].includes(e.status));
+                    const nK = cur.filter((e) => /كشف/.test(e.procedure ?? '')).length;
+                    const nC = cur.filter((e) => /استشار/.test(e.procedure ?? '')).length;
+                    return (<>
+                      <span className="rounded-md bg-[#6b3e26] px-2.5 py-1.5 text-xs font-black text-white">كشف <span className="num">{N(nK)}</span></span>
+                      <span className="rounded-md bg-sky-500 px-2.5 py-1.5 text-xs font-black text-white">استشارة <span className="num">{N(nC)}</span></span>
+                    </>);
+                  })()}
+                  </Fragment>);
               })}
               {data.role === 'admin' && data.policy === 'checkin' && s.booked > 0 && <span className="chip bg-slate-100 text-slate-500">{SL.booked}: {N(s.booked)}</span>}
             </div>
