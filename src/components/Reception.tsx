@@ -466,7 +466,9 @@ export default function Reception({ clinic }: { clinic: string }) {
                 return (
                   <Fragment key={f}>
                   <button onClick={() => setFilter(f as any)}
-                    className={`chip px-3 py-1.5 ${filter === f ? 'bg-ink-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    className={f === 'active'
+                      ? `rounded-lg bg-emerald-600 px-4 py-2 text-base font-black text-white shadow-sm hover:bg-emerald-700 ${filter === f ? 'ring-4 ring-emerald-200' : 'opacity-80'}`
+                      : `chip px-3 py-1.5 ${filter === f ? 'bg-ink-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
                     {f === 'active' ? (ar ? 'الحاليون' : 'Active') : f === 'all' ? t('all') : SL[f as Status]}{data.role === 'admin' && <span className="num opacity-70"> {N(c)}</span>}
                   </button>
                   {/* beside «الحاليون»: how many كشف / استشارة among the current patients (admin only, like the other counts) */}
