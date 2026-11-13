@@ -281,9 +281,9 @@ export default function Reception({ clinic }: { clinic: string }) {
                     <div key={current.id} className={`num animate-pop font-black leading-none ${curDone ? 'text-white/40' : 'text-gold-400'} ${current.queue_number ? 'text-7xl sm:text-8xl' : 'text-4xl'}`}>
                       {current.queue_number ? N(current.queue_number) : '✓'}</div>
                     <div className="min-w-0">
-                      {current.patient_code && <div className="num inline-block rounded-lg bg-blue-600 px-2.5 py-0.5 text-2xl font-black tracking-wide" dir="ltr">{N(current.patient_code)}</div>}
+                      {current.patient_code && <CodeChip code={String(current.patient_code)} big />}
                       <div className="mt-1 truncate text-lg font-bold">{current.patient_name}</div>
-                      {current.procedure && <div className="text-xs text-white/60">{current.procedure}</div>}
+                      {current.procedure && <div className="mt-1"><ProcChip p={current.procedure} /></div>}
                     </div>
                   </div>) : <div className="mt-3 text-white/50">{t('noCurrent')}</div>}
                 <div className="mt-3 border-t border-white/10 pt-2 text-xs">
@@ -544,13 +544,13 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
       <div className={`num grid h-12 w-12 shrink-0 place-items-center rounded-xl text-xl font-extrabold ${isCurrent ? 'bg-gold-500 text-ink-950' : 'bg-slate-100 text-ink-800'}`}>{N(e.queue_number)}</div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          {e.patient_code && <span className="num rounded-lg bg-blue-700 px-2 py-0.5 text-lg font-black leading-tight tracking-wide text-white" dir="ltr" title={ar ? "كود المريض" : "Patient code"}>{N(e.patient_code)}</span>}
+          {e.patient_code && <CodeChip code={String(e.patient_code)} />}
           <span className="truncate font-bold text-ink-900">{e.patient_name || '—'}</span>
           {e.priority && <span className="chip bg-rose-600 text-white">طارئ</span>}
           {e.source === 'walkin' && <span className="chip bg-teal-50 text-teal-700">بدون حجز</span>}
           {e.dup_hint && <span className="chip bg-amber-100 text-amber-800" title={`حجز آخر اليوم: ${e.dup_hint}`}>⚠ مكرر</span>}
           {e.booked_time && <span className="chip bg-indigo-600 font-bold text-white" title={e.booked_name ? `محجوز باسم: ${e.booked_name}` : 'له حجز إلكتروني اليوم'}>
-            📅 محجوز {e.booked_time}{e.booked_serial ? <span className="num"> · #{N(e.booked_serial)}</span> : null}</span>}
+            📅 محجوز {cleanTime(e.booked_time)}{e.booked_serial ? <span className="num"> · #{N(e.booked_serial)}</span> : null}</span>}
           {e.booked_name && <span className="text-xs text-indigo-700">(باسم {e.booked_name})</span>}
           {hasFeed && !e.booked_time && !['done', 'cancelled'].includes(st) && (
             <button onClick={linkBooking} className="chip bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700"
@@ -558,7 +558,7 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
           <span className="num">{fmtTime12(e.appt_time, lang)}</span>
-          {e.procedure && <span>{e.procedure}</span>}
+          {e.procedure && <ProcChip p={e.procedure} />}
           {!e.patient_code && e.booking_id && <span className="num" dir="ltr">#{e.booking_id}</span>}
           {e.wa_phone
             ? <button className="num font-semibold text-emerald-700 hover:underline" dir="ltr" onClick={() => whatsApp(e.wa_phone)} title={ar ? 'واتساب برسالة جاهزة (رقم الحجز الإلكتروني)' : 'WhatsApp'}>🟢 {e.wa_phone.replace(/^20/, '0')}</button>
@@ -670,7 +670,7 @@ function BookingsGuide({ list, ar, onWhatsApp }: { list: any[]; ar: boolean; onW
                   <span className="shrink-0 text-base font-black">{b.match === 'code' ? '✓' : b.match === 'link' ? '↔' : <span className="text-slate-300">○</span>}</span>
                 </div>
                 <div className="mt-1 flex items-center gap-1.5 ps-9 text-[11px]">
-                  <span className={`rounded-full px-2 py-px font-bold ${dark ? 'bg-black/15' : kashf ? 'bg-teal-100 text-teal-800' : 'bg-violet-100 text-violet-800'}`}>{b.procedure || '—'}</span>
+                  <span className={`rounded-full px-2 py-px font-bold ${dark ? 'bg-black/15' : kashf ? 'bg-[#6b3e26] text-white' : 'bg-yellow-400 text-black'}`}>{b.procedure || '—'}</span>
                   {/^\d+$/.test(b.code) ? <span className={`num rounded-full px-2 py-px font-black ${dark ? 'bg-black/15' : 'bg-blue-100 text-blue-800'}`} dir="ltr">{b.code}</span>
                     : b.code ? <span className={`rounded-full px-2 py-px ${dark ? 'bg-black/10' : 'bg-slate-100 text-slate-500'}`}>{b.code}</span> : null}
                   {b.match === 'link' && b.linked_to && <span className="truncate font-black">← {b.linked_to}</span>}
@@ -888,4 +888,31 @@ function BookingLinkDialog({ clinic, entry, bookings, close, done }: { clinic: s
       </div>
     </div>
   );
+}
+
+// patient code: western digits (662691), click = copy
+function CodeChip({ code, big }: { code: string; big?: boolean }) {
+  const [ok, setOk] = useState(false);
+  const c = toWesternDigits(code);
+  return (
+    <button type="button" dir="ltr" title="كود المريض – اضغط للنسخ"
+      onClick={(ev) => { ev.stopPropagation(); try { navigator.clipboard.writeText(c); setOk(true); setTimeout(() => setOk(false), 1200); } catch {} }}
+      className={`rounded-lg px-2 py-0.5 font-black leading-tight tracking-wide text-white transition ${ok ? 'bg-emerald-600' : 'bg-blue-700 hover:bg-blue-800'} ${big ? 'text-2xl' : 'text-lg'}`}>
+      {ok ? '✓ نُسخ' : c}</button>
+  );
+}
+
+// كشف = brown, استشارة = yellow – bold and large
+function ProcChip({ p }: { p: string }) {
+  const kashf = /كشف/.test(p), cons = /استشار/.test(p);
+  return (
+    <span className={`rounded-md px-2 py-0.5 text-sm font-black ${kashf ? 'bg-[#6b3e26] text-white' : cons ? 'bg-yellow-400 text-black' : 'bg-slate-100 text-slate-700'}`}>{p}</span>
+  );
+}
+
+// "1:40:00 pm" / "PM 01:40" → "1:40 PM"
+function cleanTime(t: string): string {
+  const m = String(t).match(/(\d{1,2}):(\d{2})/); if (!m) return t;
+  const ap = /pm|م/i.test(t) ? 'PM' : /am|ص/i.test(t) ? 'AM' : '';
+  return `${Number(m[1])}:${m[2]}${ap ? ' ' + ap : ''}`;
 }
