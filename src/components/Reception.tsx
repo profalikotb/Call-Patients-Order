@@ -670,7 +670,7 @@ function BookingsGuide({ list, ar, onWhatsApp }: { list: any[]; ar: boolean; onW
                   <span className="shrink-0 text-base font-black">{b.match === 'code' ? '✓' : b.match === 'link' ? '↔' : <span className="text-slate-300">○</span>}</span>
                 </div>
                 <div className="mt-1 flex items-center gap-1.5 ps-9 text-[11px]">
-                  <span className={`rounded-full px-2 py-px font-bold ${dark ? 'bg-black/15' : kashf ? 'bg-[#6b3e26] text-white' : 'bg-yellow-400 text-black'}`}>{b.procedure || '—'}</span>
+                  <span className={`rounded-full px-2 py-px font-bold ${dark ? 'bg-black/15' : kashf ? 'bg-[#6b3e26] text-white' : 'bg-blue-900 text-white'}`}>{b.procedure || '—'}</span>
                   {/^\d+$/.test(b.code) ? <span className={`num rounded-full px-2 py-px font-black ${dark ? 'bg-black/15' : 'bg-blue-100 text-blue-800'}`} dir="ltr">{b.code}</span>
                     : b.code ? <span className={`rounded-full px-2 py-px ${dark ? 'bg-black/10' : 'bg-slate-100 text-slate-500'}`}>{b.code}</span> : null}
                   {b.match === 'link' && b.linked_to && <span className="truncate font-black">← {b.linked_to}</span>}
@@ -906,7 +906,7 @@ function CodeChip({ code, big }: { code: string; big?: boolean }) {
 function ProcChip({ p }: { p: string }) {
   const kashf = /كشف/.test(p), cons = /استشار/.test(p);
   return (
-    <span className={`rounded-md px-2 py-0.5 text-sm font-black ${kashf ? 'bg-[#6b3e26] text-white' : cons ? 'bg-yellow-400 text-black' : 'bg-slate-100 text-slate-700'}`}>{p}</span>
+    <span className={`rounded-md px-2 py-0.5 text-sm font-black ${kashf ? 'bg-[#6b3e26] text-white' : cons ? 'bg-blue-900 text-white' : 'bg-slate-100 text-slate-700'}`}>{p}</span>
   );
 }
 
