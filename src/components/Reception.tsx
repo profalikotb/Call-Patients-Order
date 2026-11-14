@@ -529,9 +529,11 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
   if (st === 'absent' || st === 'postponed') primary.push(['return_waiting', 'إرجاع']);
 
   const more: [string, string, any?][] = [];
+  // first item: call THIS patient now (out of order) – also from the ⋯ menu
+  if (['waiting', 'booked'].includes(st)) more.push(['call', '📢 نداء هذا المريض']);
   if (['waiting'].includes(st)) more.push(['move', '⬆ تقديم', { dir: 'up' }], ['move', '⬇ تأخير', { dir: 'down' }]);
   if (['waiting', 'called', 'absent', 'postponed', 'booked', 'cancelled'].includes(st)) more.push(['emergency', '🚑 أولوية طارئة']);
-  if (['called', 'absent', 'postponed'].includes(st)) more.push(['call', 'إعادة نداء هذا المريض']);
+  if (['called', 'absent', 'postponed'].includes(st)) more.push(['call', '📢 إعادة نداء هذا المريض']);
   if (['absent', 'postponed', 'called'].includes(st)) more.push(['return_waiting', 'إرجاع لمكانه في الدور', { position: 'original' }], ['return_waiting', 'إرجاع كالتالي مباشرة', { position: 'next' }]);
   if (st === 'cancelled') more.push(['return_waiting', 'استعادة إلى الانتظار']);
   if (['waiting', 'called'].includes(st)) more.push(['skip', 'غائب (تخطي)'], ['in_room', 'دخول الكشف']);
