@@ -342,6 +342,20 @@ export default function Reception({ clinic }: { clinic: string }) {
             ↶ {t('undo')}{data.last_action ? <span className="text-xs text-slate-400">({ACTION_AR[data.last_action.action]})</span> : null}</button>
           <button className="btn-ghost" onClick={() => setDialog({ type: 'walkin' })}>＋ {t('walkin')}</button>
           <Link className="btn-ghost" href={`/summary/${clinic}`}>📋 {t('summary')}</Link>
+          {data.role === 'admin' && <button className="btn-ghost text-rose-700 ring-rose-200" disabled={!!busy}
+            title={ar ? 'حذف بيانات التجربة لهذا اليوم (للمدير فقط)' : 'clear test data (admin)'}
+            onClick={async () => {
+              const d = String(data.today ?? '').slice(0, 10);
+              if (!d) return;
+              if (!confirm(`مسح كل بيانات ${data.clinic?.name_ar ?? clinic} ليوم ${fmtDate(d, true)}؟\nالمرضى، النداءات، السجل، روابط الحجز.\nلا يمكن التراجع.`)) return;
+              if ((prompt('للتأكيد اكتب: مسح') ?? '').trim() !== 'مسح') { flash('لم يتم المسح', 'err'); return; }
+              setBusy('clear');
+              try {
+                const j = await (await fetch(`/api/admin/summary?clinic=${clinic}&date=${d}`, { method: 'DELETE' })).json();
+                if (j.ok) flash('🗑 تم مسح بيانات اليوم'); else flash(String(j.detail || j.error || 'تعذّر'), 'err');
+              } catch { flash('تعذر الاتصال بالخادم', 'err'); }
+              await load(); setBusy(null);
+            }}>🗑 {ar ? 'مسح بيانات اليوم' : 'Clear day'}</button>}
           {BOOKING_PAGES[clinic] && <button className="btn-ghost" onClick={() => openBookingPage(BOOKING_PAGES[clinic])}
             title={ar ? 'يفتح جدول الحجز في نافذة على يسار الشاشة' : 'opens the booking page on the left'}>📅 {ar ? 'جدول الحجز' : 'Bookings'}</button>}
           <a className="btn-ghost" href={`/doctor/${clinic}`} target="pq_doctor" title={ar ? 'لوحة رسائل الطبيب للمساعد' : 'doctor → assistant'}>🩺 {ar ? 'رسائل الطبيب' : 'Doctor pad'}</a>
