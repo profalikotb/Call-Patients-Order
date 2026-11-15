@@ -326,9 +326,14 @@ export default function WaitingDisplay({ clinic, k, label, auto = false }: { cli
         <main className="grid grid-cols-[1.7fr_1fr] gap-[2.5vw] px-[3vw] py-[3vh]">
           <section className={`relative flex flex-col items-center justify-center rounded-[2.5vw] bg-gradient-to-b from-ink-800 to-ink-900 ring-1 ring-gold-500/30 ${flash ? 'animate-glow' : ''}`} key={`g${flash}`}>
             <div className="text-[2.6vw] font-bold text-gold-300">الدور الحالي</div>
-            <div key={`n${s?.current_number}-${flash}`} className="num animate-pop text-[22vw] font-black leading-[1] text-gold-400 drop-shadow-[0_0_40px_rgba(233,196,90,.35)]">
-              {s?.current_number ? D(s.current_number) : '—'}
-            </div>
+            {s?.current_number ? (
+              <div key={`n${s?.current_number}-${flash}`} className="num animate-pop text-[22vw] font-black leading-[1] text-gold-400 drop-shadow-[0_0_40px_rgba(233,196,90,.35)]">
+                {D(s.current_number)}
+              </div>
+            ) : (
+              // no call yet: no giant dash (it looked like a yellow bar) – a calm waiting sign instead
+              <div className="my-[6vh] text-center text-[3.2vw] font-bold text-white/40">⏳ في انتظار النداء</div>
+            )}
             <div className="text-[2.4vw] font-semibold text-white/90">
               {s?.current_number ? `برجاء التوجه إلى ${s.room_label ?? 'غرفة الكشف'}` : 'مرحباً بكم'}
             </div>
