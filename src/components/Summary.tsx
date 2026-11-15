@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { PAY, payOf, isKashf, payTotals, egp } from '@/lib/payment';
+import ClosingCard from './ClosingCard';
 import Link from 'next/link';
 import { STATUS_AR, type Status } from '@/lib/config';
 import { toArabicDigits } from '@/lib/arabic';
@@ -86,6 +87,7 @@ export default function Summary({ clinic }: { clinic: string }) {
               </table>
             </section>);
         })()}
+        {d.role === 'admin' && <ClosingCard clinic={clinic} date={date} T={payTotals(d.entries, d.fee ?? 0)} />}
         <table className="w-full border-collapse text-[12px]">
           <thead><tr className="bg-slate-100 text-start">
             {['الرقم', 'الموعد', 'الاسم', 'النوع', 'الدفع', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة (من النداء)'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}

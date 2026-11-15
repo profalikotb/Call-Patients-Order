@@ -42,9 +42,9 @@ export const DELETE = handle(async (req) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, 'bad_date');
   const d = db();
   const where = (t: string) => d.from(t).delete().eq('clinic_id', clinic).eq('service_date', date);
-  for (const t of ['announcements', 'audit_log', 'booking_links', 'entry_payments', 'queue_entries', 'queue_days']) {
+  for (const t of ['announcements', 'audit_log', 'booking_links', 'entry_payments', 'day_closing', 'queue_entries', 'queue_days']) {
     const { error } = await where(t);
-    if (error && !/booking_links|entry_payments/.test(error.message)) throw new HttpError(500, `${t}: ${error.message}`);
+    if (error && !/booking_links|entry_payments|day_closing/.test(error.message)) throw new HttpError(500, `${t}: ${error.message}`);
   }
   await d.rpc('refresh_display', { p_clinic: clinic, p_date: date });            // TV shows the empty day
   return json({ ok: true, cleared: { clinic, date } });
