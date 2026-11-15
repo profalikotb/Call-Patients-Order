@@ -28,3 +28,21 @@ export const GET = handle(async (req) => {
     avg_consult: durs.length ? Math.round((durs.reduce((x, y) => x + y, 0) / durs.length) * 10) / 10 : null, waits,
     entries: rows, audit: a.data ?? [], announcements: an.data ?? [] });
 });
+
+// DELETE ?clinic=&date=  (admin only) – wipe one clinic day: patients, calls, edit log, booking links.
+// Oracle is not touched: patients still in Oracle for that date come back on the next push.
+export const DELETE = handle(async (req) => {
+  const u = new URL(req.url);
+  const clinic = clinicParam(u.searchParams.get('clinic'));
+  await requireStaff({ clinic, admin: true });
+  const date = u.searchParams.get('date') || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, 'bad_date');
+  const d = db();
+  const where = (t: string) => d.from(t).delete().eq('clinic_id', clinic).eq('service_date', date);
+  for (const t of ['announcements', 'audit_log', 'booking_links', 'queue_entries', 'queue_days']) {
+    const { error } = await where(t);
+    if (error && !/booking_links/.test(error.message)) throw new HttpError(500, `${t}: ${error.message}`);
+  }
+  await d.rpc('refresh_display', { p_clinic: clinic, p_date: date });            // TV shows the empty day
+  return json({ ok: true, cleared: { clinic, date } });
+});

@@ -11,10 +11,20 @@ export default function Summary({ clinic }: { clinic: string }) {
   const [date, setDate] = useState(cairoDate());
   const [d, setD] = useState<any>(null);
   const [name, setName] = useState('');
+  const [admin, setAdmin] = useState(false);
+  const [n, setN] = useState(0);                              // reload counter
   useEffect(() => {
     fetch(`/api/admin/summary?clinic=${clinic}&date=${date}`).then((r) => r.json()).then(setD);
-    fetch('/api/clinics').then((r) => r.json()).then((j) => setName(j.clinics?.find((c: any) => c.id === clinic)?.name_ar ?? clinic));
-  }, [clinic, date]);
+    fetch('/api/clinics').then((r) => r.json()).then((j) => { setName(j.clinics?.find((c: any) => c.id === clinic)?.name_ar ?? clinic); setAdmin(j.session?.role === 'admin'); });
+  }, [clinic, date, n]);
+  const clearDay = async () => {
+    if (!confirm(`مسح كل بيانات ${name} ليوم ${fmtDate(date, true)}؟\n(المرضى، النداءات، سجل التعديلات)\n\nلا يمكن التراجع.\nالمرضى الموجودون في أوراكل بنفس التاريخ سيعودون مع المزامنة التالية.`)) return;
+    if (prompt('للتأكيد اكتب: مسح') !== 'مسح') return;
+    const r = await fetch(`/api/admin/summary?clinic=${clinic}&date=${date}`, { method: 'DELETE' });
+    const j = await r.json().catch(() => ({}));
+    alert(j.ok ? 'تم المسح ✓' : `تعذّر المسح: ${j.detail || j.error || r.status}`);
+    setN((x) => x + 1);
+  };
   const A = toArabicDigits;
   const cards: [string, number | string][] = d ? [
     ['إجمالي', d.total], ['تم الكشف', d.by.done ?? 0], ['منتظر', d.by.waiting ?? 0], ['غائب', d.by.absent ?? 0],
@@ -26,7 +36,8 @@ export default function Summary({ clinic }: { clinic: string }) {
       <div className="no-print mb-4 flex items-center gap-2">
         <Link href={`/reception/${clinic}`} className="btn-ghost text-sm">→ الاستقبال</Link>
         <input type="date" className="input w-auto" value={date} onChange={(e) => setDate(e.target.value)} />
-        <button className="btn-primary ms-auto text-sm" onClick={() => print()}>🖨 طباعة A4</button>
+        {admin && <button className="btn-ghost ms-auto text-sm text-rose-700" onClick={clearDay} title="مسح بيانات التجربة لهذا اليوم">🗑 مسح بيانات اليوم</button>}
+        <button className={`btn-primary text-sm ${admin ? '' : 'ms-auto'}`} onClick={() => print()}>🖨 طباعة A4</button>
       </div>
       <header className="mb-4 flex items-end justify-between border-b-2 border-ink-900 pb-2">
         <div>
