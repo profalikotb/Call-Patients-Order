@@ -6,7 +6,7 @@ import { watchDisplay } from '@/lib/supabaseBrowser';
 import { STATUS_AR, STATUS_EN, type Status } from '@/lib/config';
 import { toArabicDigits, normalizeAr, toWesternDigits } from '@/lib/arabic';
 import { fmtTime12, fmtTs12, fmtDate } from '@/lib/time';
-import { PAY, PAY_ORDER, payOf, type PayMethod } from '@/lib/payment';
+import { PAY, PAY_ORDER, payOf, isKashf, payTotals, egp, type PayMethod } from '@/lib/payment';
 
 type Entry = any;
 const STATUS_STYLE: Record<Status, string> = {
@@ -498,6 +498,17 @@ export default function Reception({ clinic }: { clinic: string }) {
                   })()}
                   </Fragment>);
               })}
+              {data.role === 'admin' && (() => {          // money total for today (كشف only; استشارة free) – admin only
+                const T = payTotals(entries, data.fee ?? 0);
+                return <button className="rounded-md bg-emerald-800 px-2.5 py-1.5 text-xs font-black text-white" title={T.fee ? `⚡ فوري ${T.fawry} = ${egp(T.fawrySum)}\n📱 انستاباي ${T.instapay} = ${egp(T.instapaySum)}\n↩ رد ${T.refund} = ${egp(T.refundSum)}\nسعر الكشف ${egp(T.fee)} – اضغط للتغيير` : 'اضغط لتحديد سعر الكشف'}
+                  onClick={async () => {
+                    const v = prompt('سعر الكشف (جنيه):', String(data.fee || ''));
+                    if (v === null) return;
+                    const j = await (await fetch('/api/fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, fee: toWesternDigits(v) }) })).json().catch(() => ({}));
+                    if (j.ok) { flash(`سعر الكشف: ${egp(j.fee)}`); load(); } else flash('سعر غير صحيح', 'err');
+                  }}>💰 {T.fee ? <span className="num">{egp(T.total)}</span> : 'حدّد سعر الكشف'}
+                  {T.fee ? <span className="num font-bold opacity-80"> · ⚡{T.fawry} 📱{T.instapay}{T.refund ? ` ↩${T.refund}` : ''}</span> : null}</button>;
+              })()}
               {data.role === 'admin' && data.policy === 'checkin' && s.booked > 0 && <span className="chip bg-slate-100 text-slate-500">{SL.booked}: {N(s.booked)}</span>}
             </div>
           </div>
@@ -584,7 +595,7 @@ function Row({ clinic, reload, e, N, ar, lang, SL, isCurrent, busy, policy, open
         <div className="flex flex-wrap items-center gap-1.5">
           {e.patient_code && <CodeChip code={String(e.patient_code)} />}
           <span className="truncate font-bold text-ink-900">{e.patient_name || '—'}</span>
-          <PayChip clinic={clinic} e={e} notify={notify} reload={reload} />
+          {isKashf(e.procedure) && <PayChip clinic={clinic} e={e} notify={notify} reload={reload} />}
           {e.priority && <span className="chip bg-rose-600 text-white">طارئ</span>}
           {e.source === 'walkin' && <span className="chip bg-teal-50 text-teal-700">بدون حجز</span>}
           {e.dup_hint && <span className="chip bg-amber-100 text-amber-800" title={`حجز آخر اليوم: ${e.dup_hint}`}>⚠ مكرر</span>}

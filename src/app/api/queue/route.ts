@@ -7,6 +7,7 @@ import { sessionDate } from '@/lib/server/session';
 import { bookingsList } from '@/lib/server/bookings';
 import { listStaffMsgs } from '@/lib/server/staffMsg';
 export const runtime = 'nodejs';
+import { getFee } from '@/lib/server/fees';
 export const dynamic = 'force-dynamic';
 
 const ORDER: Record<string, number> = { in_room: 0, called: 1, waiting: 2, booked: 3, postponed: 4, absent: 5, done: 6, cancelled: 7 };
@@ -66,7 +67,7 @@ export const GET = handle(async (req) => {
   const count = (s: string) => rows.filter((r) => r.status === s).length;
   const d = display.data;
   return json({
-    ok: true, today, clinic: c, role: me.role, policy: settings.policy, room_label: settings.room_label,
+    ok: true, today, clinic: c, role: me.role, fee: me.role === 'admin' ? await getFee(clinic) : null, policy: settings.policy, room_label: settings.room_label,
     voice: { includeName: settings.voice.includeName, provider: settings.voice.provider },
     day: day.data ?? { version: 0, paused: false, current_entry_id: null },
     entries: list,

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { PAY, payOf } from '@/lib/payment';
+import { PAY, payOf, isKashf, payTotals, egp } from '@/lib/payment';
 import Link from 'next/link';
 import { STATUS_AR, type Status } from '@/lib/config';
 import { toArabicDigits } from '@/lib/arabic';
@@ -30,7 +30,6 @@ export default function Summary({ clinic }: { clinic: string }) {
   const cards: [string, number | string][] = d ? [
     ['إجمالي', d.total], ['تم الكشف', d.by.done ?? 0], ['منتظر', d.by.waiting ?? 0], ['غائب', d.by.absent ?? 0],
     ['مؤجل', d.by.postponed ?? 0], ['ملغي', d.by.cancelled ?? 0], ['بدون حجز', d.walkins], ['متوسط الكشف (دقيقة)', d.avg_consult ?? '—'],
-    ['⚡ فوري', d.pays?.fawry ?? 0], ['📱 انستاباي', d.pays?.instapay ?? 0], ['↩ تم رد الكشف', d.pays?.refund ?? 0],
     ['استراحات الطبيب', (() => { const b = withBreaks(sortByEntry(d.entries)).filter((r: any) => r.brk); return b.length ? `${b.length} – ${b.reduce((t: number, r: any) => t + r.brk.min, 0)} دقيقة` : '0'; })()],
   ] : [];
   return (
@@ -56,6 +55,37 @@ export default function Summary({ clinic }: { clinic: string }) {
               <div className="num text-2xl font-extrabold text-ink-900">{typeof v === 'number' ? A(v) : A(String(v))}</div>
             </div>))}
         </section>
+        {d.role === 'admin' && (() => {          // money: كشف only (استشارة free) – admin only
+          const T = payTotals(d.entries, d.fee ?? 0);
+          const setFee = async () => {
+            const v = prompt('سعر الكشف (جنيه):', String(d.fee || '')); if (v === null) return;
+            const j = await (await fetch('/api/fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, fee: v.replace(/[٠-٩]/g, (c) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))) }) })).json().catch(() => ({}));
+            if (j.ok) setN((x) => x + 1); else alert('سعر غير صحيح');
+          };
+          const pe = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any;
+          return (
+            <section className="mb-5 break-inside-avoid overflow-hidden rounded-xl border-2 border-emerald-700">
+              <div className="flex items-center justify-between bg-emerald-700 px-3 py-1.5 text-white" style={pe}>
+                <b>💰 الحساب – الكشف فقط (الاستشارة مجانية)</b>
+                <button onClick={setFee} className="num rounded bg-white/15 px-2 py-0.5 text-xs font-bold print:bg-transparent">سعر الكشف: {T.fee ? egp(T.fee) : 'اضغط للتحديد'}</button>
+              </div>
+              <table className="w-full border-collapse text-[13px]">
+                <tbody>
+                  {([['fawry', T.fawry, T.fawrySum], ['instapay', T.instapay, T.instapaySum], ['refund', T.refund, T.refundSum]] as const).map(([m, c, sum]) => (
+                    <tr key={m} className="border-b border-slate-200">
+                      <td className="px-3 py-1"><span className={`inline-block rounded px-2 py-px text-[12px] font-black ${PAY[m].cls}`} style={pe}>{PAY[m].icon} {PAY[m].ar}</span></td>
+                      <td className="num px-3 py-1">{A(c)} كشف</td>
+                      <td className={`num px-3 py-1 text-end font-bold ${m === 'refund' ? 'text-rose-700' : ''}`}>{T.fee ? (m === 'refund' ? 'مُرتجع ' : '') + egp(sum) : '—'}</td>
+                    </tr>))}
+                  <tr className="bg-emerald-50" style={pe}>
+                    <td className="px-3 py-1.5 font-black">الإجمالي النهائي</td>
+                    <td className="num px-3 py-1.5 font-bold">{A(T.paid)} كشف مدفوع</td>
+                    <td className="num px-3 py-1.5 text-end text-lg font-black text-emerald-800">{T.fee ? egp(T.total) : '—'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>);
+        })()}
         <table className="w-full border-collapse text-[12px]">
           <thead><tr className="bg-slate-100 text-start">
             {['الرقم', 'الموعد', 'الاسم', 'النوع', 'الدفع', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة (من النداء)'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
@@ -73,8 +103,8 @@ export default function Summary({ clinic }: { clinic: string }) {
               <td className="border border-slate-200 px-1 py-1 text-center">{e.procedure ? (
                 <span className={`inline-block rounded px-2 py-px text-[11px] font-black text-white ${/كشف/.test(e.procedure) ? 'bg-[#6b3e26]' : /استشار/.test(e.procedure) ? 'bg-sky-500' : 'bg-slate-500'}`}
                   style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{e.procedure}</span>) : ''}</td>
-              <td className="border border-slate-200 px-1 py-1 text-center"><span className={`inline-block whitespace-nowrap rounded px-1.5 py-px text-[11px] font-black ${PAY[payOf(e.payment)].cls}`}
-                style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{PAY[payOf(e.payment)].ar}</span></td>
+              <td className="border border-slate-200 px-1 py-1 text-center">{isKashf(e.procedure) ? <span className={`inline-block whitespace-nowrap rounded px-1.5 py-px text-[11px] font-black ${PAY[payOf(e.payment)].cls}`}
+                style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{PAY[payOf(e.payment)].ar}</span> : <span className="text-[11px] text-slate-400">مجاني</span>}</td>
               <td className="border border-slate-200 px-2 py-1">{STATUS_AR[e.status as Status]}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.called_at)}{e.called_count > 1 ? ` ×${A(e.called_count)}` : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.in_room_at)}</td>

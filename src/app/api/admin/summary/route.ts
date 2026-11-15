@@ -1,13 +1,14 @@
 import { handle, json, requireStaff, clinicParam, HttpError } from '@/lib/server/http';
 import { db } from '@/lib/server/db';
 import { cairoDate } from '@/lib/time';
+import { getFee } from '@/lib/server/fees';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export const GET = handle(async (req) => {
   const u = new URL(req.url);
   const clinic = clinicParam(u.searchParams.get('clinic'));
-  await requireStaff({ clinic });
+  const me = await requireStaff({ clinic });
   const date = u.searchParams.get('date') || cairoDate();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, 'bad_date');
   const [e, a, an, pay] = await Promise.all([
@@ -21,15 +22,13 @@ export const GET = handle(async (req) => {
   ]);
   const payBy = new Map<string, string>((pay as any[]).map((p) => [p.entry_id, p.method]));
   const rows = (e.data ?? []).map((r) => ({ ...r, payment: payBy.get(r.id) ?? 'fawry' }));
-  const pays: Record<string, number> = { fawry: 0, instapay: 0, refund: 0 };
-  rows.filter((r) => r.status !== 'cancelled' || r.payment === 'refund').forEach((r) => { pays[r.payment] = (pays[r.payment] ?? 0) + 1; });
   const by: Record<string, number> = {};
   rows.forEach((r) => { by[r.status] = (by[r.status] ?? 0) + 1; });
   // consultation time = from «نداء» to the patient leaving the Oracle list (done)
   const durs = rows.filter((r) => r.done_at && (r.called_at || r.in_room_at)).map((r) => (+new Date(r.done_at) - +new Date(r.called_at || r.in_room_at)) / 60000);
   const waits = rows.filter((r) => r.called_at && r.appt_time).length;
   return json({ ok: true, date, by, total: rows.length, walkins: rows.filter((r) => r.source === 'walkin').length,
-    pays, avg_consult: durs.length ? Math.round((durs.reduce((x, y) => x + y, 0) / durs.length) * 10) / 10 : null, waits,
+    role: me.role, fee: me.role === 'admin' ? await getFee(clinic) : null, avg_consult: durs.length ? Math.round((durs.reduce((x, y) => x + y, 0) / durs.length) * 10) / 10 : null, waits,
     entries: rows, audit: a.data ?? [], announcements: an.data ?? [] });
 });
 
