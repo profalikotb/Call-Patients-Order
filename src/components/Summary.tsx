@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { PAY, payOf } from '@/lib/payment';
 import Link from 'next/link';
 import { STATUS_AR, type Status } from '@/lib/config';
 import { toArabicDigits } from '@/lib/arabic';
@@ -29,6 +30,7 @@ export default function Summary({ clinic }: { clinic: string }) {
   const cards: [string, number | string][] = d ? [
     ['إجمالي', d.total], ['تم الكشف', d.by.done ?? 0], ['منتظر', d.by.waiting ?? 0], ['غائب', d.by.absent ?? 0],
     ['مؤجل', d.by.postponed ?? 0], ['ملغي', d.by.cancelled ?? 0], ['بدون حجز', d.walkins], ['متوسط الكشف (دقيقة)', d.avg_consult ?? '—'],
+    ['⚡ فوري', d.pays?.fawry ?? 0], ['📱 انستاباي', d.pays?.instapay ?? 0], ['↩ تم رد الكشف', d.pays?.refund ?? 0],
     ['استراحات الطبيب', (() => { const b = withBreaks(sortByEntry(d.entries)).filter((r: any) => r.brk); return b.length ? `${b.length} – ${b.reduce((t: number, r: any) => t + r.brk.min, 0)} دقيقة` : '0'; })()],
   ] : [];
   return (
@@ -56,11 +58,11 @@ export default function Summary({ clinic }: { clinic: string }) {
         </section>
         <table className="w-full border-collapse text-[12px]">
           <thead><tr className="bg-slate-100 text-start">
-            {['الرقم', 'الموعد', 'الاسم', 'النوع', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة (من النداء)'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
+            {['الرقم', 'الموعد', 'الاسم', 'النوع', 'الدفع', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة (من النداء)'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
           </tr></thead>
           <tbody>{withBreaks(sortByEntry(d.entries)).map((row: any, i: number) => row.brk ? (
             <tr key={'b' + i} className="break-inside-avoid bg-amber-50">
-              <td colSpan={9} className="border border-amber-200 px-2 py-1 text-center font-bold text-amber-800">
+              <td colSpan={10} className="border border-amber-200 px-2 py-1 text-center font-bold text-amber-800">
                 ☕ استراحة الطبيب – {minutesAr(row.brk.min, A)} <span className="num font-normal">({fmtTs12(row.brk.from)} ← {fmtTs12(row.brk.to)})</span>
               </td>
             </tr>) : ((e: any) => (
@@ -71,6 +73,8 @@ export default function Summary({ clinic }: { clinic: string }) {
               <td className="border border-slate-200 px-1 py-1 text-center">{e.procedure ? (
                 <span className={`inline-block rounded px-2 py-px text-[11px] font-black text-white ${/كشف/.test(e.procedure) ? 'bg-[#6b3e26]' : /استشار/.test(e.procedure) ? 'bg-sky-500' : 'bg-slate-500'}`}
                   style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{e.procedure}</span>) : ''}</td>
+              <td className="border border-slate-200 px-1 py-1 text-center"><span className={`inline-block whitespace-nowrap rounded px-1.5 py-px text-[11px] font-black ${PAY[payOf(e.payment)].cls}`}
+                style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{PAY[payOf(e.payment)].ar}</span></td>
               <td className="border border-slate-200 px-2 py-1">{STATUS_AR[e.status as Status]}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.called_at)}{e.called_count > 1 ? ` ×${A(e.called_count)}` : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.in_room_at)}</td>

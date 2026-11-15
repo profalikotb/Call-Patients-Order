@@ -6,6 +6,7 @@ import { watchDisplay } from '@/lib/supabaseBrowser';
 import { STATUS_AR, STATUS_EN, type Status } from '@/lib/config';
 import { toArabicDigits, normalizeAr, toWesternDigits } from '@/lib/arabic';
 import { fmtTime12, fmtTs12, fmtDate } from '@/lib/time';
+import { PAY, PAY_ORDER, payOf, type PayMethod } from '@/lib/payment';
 
 type Entry = any;
 const STATUS_STYLE: Record<Status, string> = {
@@ -504,7 +505,7 @@ export default function Reception({ clinic }: { clinic: string }) {
           <div className="divide-y divide-slate-100">
             {shown.length === 0 && <div className="p-8 text-center text-sm text-slate-400">{t('emptyQueue')}</div>}
             {shown.map((e) => (
-              <Row key={e.id} e={e} N={N} ar={ar} lang={lang} SL={SL} isCurrent={e.id === current?.id} busy={busy} policy={data.policy}
+              <Row key={e.id} clinic={clinic} reload={load} e={e} N={N} ar={ar} lang={lang} SL={SL} isCurrent={e.id === current?.id} busy={busy} policy={data.policy}
                 open={menu === e.id} setOpen={(o: boolean) => setMenu(o ? e.id : null)} act={act}
                 askNumber={() => setDialog({ type: 'number', entry: e })}
                 confirm={(text: string, run: () => void) => setDialog({ type: 'confirm', text, run })}
@@ -534,7 +535,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   );
 }
 
-function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking, hasFeed, whatsApp, notify }: any) {
+function Row({ clinic, reload, e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking, hasFeed, whatsApp, notify }: any) {
   const st = e.status as Status;
   const primary: [string, string, any?][] = [];
   if (st === 'booked') primary.push(['checkin', 'تسجيل وصول']);
@@ -583,6 +584,7 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
         <div className="flex flex-wrap items-center gap-1.5">
           {e.patient_code && <CodeChip code={String(e.patient_code)} />}
           <span className="truncate font-bold text-ink-900">{e.patient_name || '—'}</span>
+          <PayChip clinic={clinic} e={e} notify={notify} reload={reload} />
           {e.priority && <span className="chip bg-rose-600 text-white">طارئ</span>}
           {e.source === 'walkin' && <span className="chip bg-teal-50 text-teal-700">بدون حجز</span>}
           {e.dup_hint && <span className="chip bg-amber-100 text-amber-800" title={`حجز آخر اليوم: ${e.dup_hint}`}>⚠ مكرر</span>}
@@ -954,4 +956,37 @@ function cleanTime(t: string): string {
   const m = String(t).match(/(\d{1,2}):(\d{2})/); if (!m) return t;
   const ap = /pm|م/i.test(t) ? 'PM' : /am|ص/i.test(t) ? 'AM' : '';
   return `${Number(m[1])}:${m[2]}${ap ? ' ' + ap : ''}`;
+}
+
+// payment mark: فوري (default) / انستاباي / تم رد الكشف – tap to change for this patient
+function PayChip({ clinic, e, notify, reload }: { clinic: string; e: any; notify?: (s: string, k?: any) => void; reload: () => void }) {
+  const [m, setM] = useState<PayMethod>(payOf(e.payment));
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setM(payOf(e.payment)); }, [e.payment]);
+  const pick = async (x: PayMethod) => {
+    setOpen(false); if (x === m) return;
+    const prev = m; setM(x);
+    try {
+      const j = await (await fetch('/api/payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, entry_id: e.id, method: x }) })).json();
+      if (!j.ok) throw new Error(j.detail || j.error);
+      notify?.(`${PAY[x].icon} ${e.patient_name}: ${PAY[x].ar}`);
+      reload();
+    } catch (err: any) { setM(prev); notify?.(`تعذّر حفظ طريقة الدفع: ${err?.message || ''}`, 'err'); }
+  };
+  const p = PAY[m];
+  return (
+    <span className="relative inline-flex">
+      <button onClick={() => setOpen(!open)} title="طريقة الدفع – اضغط للتغيير"
+        className={`chip px-2 font-bold ${p.cls} ${m === 'fawry' ? 'opacity-80' : 'shadow ring-2 ring-offset-1 ' + (m === 'refund' ? 'ring-rose-300' : 'ring-violet-300')}`}>
+        {p.icon} {p.ar} <span className="opacity-60">▾</span></button>
+      {open && (<>
+        <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+        <div className="absolute start-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-xl bg-white py-1 shadow-xl ring-1 ring-slate-200">
+          {PAY_ORDER.map((x) => (
+            <button key={x} onClick={() => pick(x)} className={`flex w-full items-center gap-2 px-3 py-2 text-start text-sm hover:bg-slate-50 ${x === m ? 'font-bold' : ''}`}>
+              <span className={`grid h-6 w-6 place-items-center rounded-md text-xs ${PAY[x].cls}`}>{PAY[x].icon}</span>{PAY[x].ar}{x === m ? ' ✓' : ''}
+            </button>))}
+        </div></>)}
+    </span>
+  );
 }

@@ -15,7 +15,7 @@ export const GET = handle(async (req) => {
   const clinic = clinicParam(new URL(req.url).searchParams.get('clinic'));
   const me = await requireStaff({ clinic });
   const today = await sessionDate(clinic);
-  const [c, settings, entries, day, display, last, blist, msgs, links] = await Promise.all([
+  const [c, settings, entries, day, display, last, blist, msgs, links, pays] = await Promise.all([
     getClinic(clinic),
     getClinicSettings(clinic),
     db().from('queue_entries').select('*').eq('clinic_id', clinic).eq('service_date', today),
@@ -26,6 +26,7 @@ export const GET = handle(async (req) => {
     bookingsList(today),
     listStaffMsgs(clinic),
     db().from('booking_links').select('*').eq('clinic_id', clinic).eq('service_date', today).then((r) => r.data ?? [], () => []),
+    db().from('entry_payments').select('entry_id,method').eq('clinic_id', clinic).eq('service_date', today).then((r) => r.data ?? [], () => []),
   ]);
   if (!c) return json({ ok: false, error: 'unknown_clinic' }, 404);
   if (entries.error) throw entries.error;
@@ -33,6 +34,7 @@ export const GET = handle(async (req) => {
   const books = new Map(blist.filter((x) => /^\d+$/.test(x.code)).map((x) => [x.code, x]));
   const oracleCodes = new Set(rows.map((r) => String(r.patient_code ?? '')).filter(Boolean));
   const linkBy = new Map<string, any>((links as any[]).map((l) => [l.entry_id, l]));
+  const payBy = new Map<string, string>((pays as any[]).map((p) => [p.entry_id, p.method]));
   const linkedTo = new Map<number, string>();                                  // booking serial → patient linked to it
   for (const l of links as any[]) if (l.serial) linkedTo.set(l.serial, rows.find((r) => r.id === l.entry_id)?.patient_name ?? '');
 
@@ -47,7 +49,7 @@ export const GET = handle(async (req) => {
     .sort((a, b) => Number(a.sort_key ?? 1e9) - Number(b.sort_key ?? 1e9) || a.queue_number - b.queue_number);
   const busy = rows.some((r) => r.status === 'in_room' || r.status === 'called') ? 1 : 0;
   const pos = new Map(waiting.map((r, i) => [r.id, i]));
-  const list = rows.map((r) => ({ ...r, position: pos.get(r.id) ?? null,
+  const list = rows.map((r) => ({ ...r, position: pos.get(r.id) ?? null, payment: payBy.get(r.id) ?? 'fawry',
     // online booking with the SAME patient code → WhatsApp number + booked time (Oracle data is not changed)
     // booking: linked by hand (another name / serial) wins, else same patient code
     ...(() => {
