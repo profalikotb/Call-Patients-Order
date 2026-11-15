@@ -67,7 +67,7 @@ export const GET = handle(async (req) => {
   const count = (s: string) => rows.filter((r) => r.status === s).length;
   const d = display.data;
   return json({
-    ok: true, today, clinic: c, role: me.role, fee: me.role === 'admin' ? await getFee(clinic) : null, policy: settings.policy, room_label: settings.room_label,
+    ok: true, today, clinic: c, role: me.role, fee: me.role === 'admin' ? await getFee(clinic, today) : null, policy: settings.policy, room_label: settings.room_label,
     voice: { includeName: settings.voice.includeName, provider: settings.voice.provider },
     day: day.data ?? { version: 0, paused: false, current_entry_id: null },
     entries: list,

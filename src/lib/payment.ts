@@ -1,8 +1,8 @@
-// Payment method per patient. Default = فوري (no row stored).
+// Payment method per patient. Default = كاش (no row stored). Internal key stays 'fawry' (stored data).
 export type PayMethod = 'fawry' | 'instapay' | 'refund';
 export const PAY_DEFAULT: PayMethod = 'fawry';
 export const PAY: Record<PayMethod, { ar: string; icon: string; cls: string }> = {
-  fawry:    { ar: 'فوري',         icon: '⚡', cls: 'bg-[#FFD200] text-[#0B2A6F] ring-1 ring-[#0B2A6F]/40' },
+  fawry:    { ar: 'كاش',          icon: '💵', cls: 'bg-gradient-to-l from-[#14532D] to-[#16A34A] text-white' },
   instapay: { ar: 'انستاباي',     icon: '📱', cls: 'bg-gradient-to-l from-[#4B1E78] to-[#8A3FC8] text-white' },
   refund:   { ar: 'تم رد الكشف', icon: '↩', cls: 'bg-rose-600 text-white' },
 };

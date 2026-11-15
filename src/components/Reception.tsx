@@ -500,14 +500,14 @@ export default function Reception({ clinic }: { clinic: string }) {
               })}
               {data.role === 'admin' && (() => {          // money total for today (كشف only; استشارة free) – admin only
                 const T = payTotals(entries, data.fee ?? 0);
-                return <button className="rounded-md bg-emerald-800 px-2.5 py-1.5 text-xs font-black text-white" title={T.fee ? `⚡ فوري ${T.fawry} = ${egp(T.fawrySum)}\n📱 انستاباي ${T.instapay} = ${egp(T.instapaySum)}\n↩ رد ${T.refund} = ${egp(T.refundSum)}\nسعر الكشف ${egp(T.fee)} – اضغط للتغيير` : 'اضغط لتحديد سعر الكشف'}
+                return <button className="rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-black text-amber-300" title={T.fee ? `💵 كاش ${T.fawry} = ${egp(T.fawrySum)}\n📱 انستاباي ${T.instapay} = ${egp(T.instapaySum)}\n↩ رد ${T.refund} = ${egp(T.refundSum)}\nسعر الكشف ${egp(T.fee)} – اضغط للتغيير` : 'اضغط لتحديد سعر الكشف'}
                   onClick={async () => {
-                    const v = prompt(`سعر الكشف في ${data.clinic?.name_ar ?? ''} (جنيه):\n(لكل عيادة سعرها – أسعار كل العيادات من صفحة الإعدادات)`, String(data.fee || ''));
+                    const v = prompt(`سعر الكشف في ${data.clinic?.name_ar ?? ''} (جنيه):\n(السعر الجديد يُطبق من اليوم – الأيام السابقة تحتفظ بسعرها)`, String(data.fee || ''));
                     if (v === null) return;
                     const j = await (await fetch('/api/fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, fee: toWesternDigits(v) }) })).json().catch(() => ({}));
                     if (j.ok) { flash(`سعر الكشف: ${egp(j.fee)}`); load(); } else flash('سعر غير صحيح', 'err');
                   }}>💰 {T.fee ? <span className="num">{egp(T.total)}</span> : 'حدّد سعر الكشف'}
-                  {T.fee ? <span className="num font-bold opacity-80"> · ⚡{T.fawry} 📱{T.instapay}{T.refund ? ` ↩${T.refund}` : ''}</span> : null}</button>;
+                  {T.fee ? <span className="num font-bold opacity-80"> · 💵{T.fawry} 📱{T.instapay}{T.refund ? ` ↩${T.refund}` : ''}</span> : null}</button>;
               })()}
               {data.role === 'admin' && data.policy === 'checkin' && s.booked > 0 && <span className="chip bg-slate-100 text-slate-500">{SL.booked}: {N(s.booked)}</span>}
             </div>
@@ -969,7 +969,7 @@ function cleanTime(t: string): string {
   return `${Number(m[1])}:${m[2]}${ap ? ' ' + ap : ''}`;
 }
 
-// payment mark: فوري (default) / انستاباي / تم رد الكشف – tap to change for this patient
+// payment mark: كاش (default) / انستاباي / تم رد الكشف – tap to change for this patient
 function PayChip({ clinic, e, notify, reload }: { clinic: string; e: any; notify?: (s: string, k?: any) => void; reload: () => void }) {
   const [m, setM] = useState<PayMethod>(payOf(e.payment));
   const [open, setOpen] = useState(false);
@@ -989,7 +989,7 @@ function PayChip({ clinic, e, notify, reload }: { clinic: string; e: any; notify
     <span className="relative inline-flex">
       <button onClick={() => setOpen(!open)} title="طريقة الدفع – اضغط للتغيير"
         className={`inline-flex items-center gap-1.5 rounded-full py-1 pe-2.5 ps-1 text-sm font-black leading-none shadow-sm transition hover:scale-105 hover:shadow ${p.cls}`}>
-        <span className={`grid h-6 w-6 place-items-center rounded-full text-xs ${m === 'fawry' ? 'bg-[#0B2A6F] text-[#FFD200]' : 'bg-white/25'}`}>{p.icon}</span>
+        <span className={`grid h-6 w-6 place-items-center rounded-full text-xs bg-white/25`}>{p.icon}</span>
         {p.ar}<span className="text-[10px] opacity-60">▼</span></button>
       {open && (<>
         <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />

@@ -1,4 +1,4 @@
-// POST {clinic, entry_id, method: 'fawry'|'instapay'|'refund'}  – فوري is the default (stored as no row)
+// POST {clinic, entry_id, method: 'fawry'|'instapay'|'refund'}  – كاش is the default (stored as no row)
 import { handle, json, requireStaff, clinicParam, HttpError } from '@/lib/server/http';
 import { db } from '@/lib/server/db';
 import { PAY_DEFAULT, payOf } from '@/lib/payment';

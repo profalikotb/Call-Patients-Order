@@ -345,6 +345,7 @@ function FeesCard({ clinics }: { clinics: any[] }) {
   return (
     <div className="card mt-4 space-y-3 border-2 border-emerald-600 p-5">
       <div className="font-display text-lg font-extrabold text-emerald-800">💰 سعر الكشف لكل عيادة <span className="text-sm font-semibold text-slate-500">(الاستشارة مجانية)</span></div>
+      <p className="text-xs text-slate-500">السعر الجديد يُطبق من جلسة اليوم – الأيام السابقة تحتفظ بالسعر الذي كان سارياً وقتها.</p>
       <div className="grid gap-3 sm:grid-cols-3">
         {clinics.map((c) => (
           <label key={c.id} className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">

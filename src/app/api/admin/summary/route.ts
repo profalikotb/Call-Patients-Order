@@ -28,7 +28,7 @@ export const GET = handle(async (req) => {
   const durs = rows.filter((r) => r.done_at && (r.called_at || r.in_room_at)).map((r) => (+new Date(r.done_at) - +new Date(r.called_at || r.in_room_at)) / 60000);
   const waits = rows.filter((r) => r.called_at && r.appt_time).length;
   return json({ ok: true, date, by, total: rows.length, walkins: rows.filter((r) => r.source === 'walkin').length,
-    role: me.role, fee: me.role === 'admin' ? await getFee(clinic) : null, avg_consult: durs.length ? Math.round((durs.reduce((x, y) => x + y, 0) / durs.length) * 10) / 10 : null, waits,
+    role: me.role, fee: me.role === 'admin' ? await getFee(clinic, date) : null, avg_consult: durs.length ? Math.round((durs.reduce((x, y) => x + y, 0) / durs.length) * 10) / 10 : null, waits,
     entries: rows, audit: a.data ?? [], announcements: an.data ?? [] });
 });
 
