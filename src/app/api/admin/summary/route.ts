@@ -11,7 +11,7 @@ export const GET = handle(async (req) => {
   const date = u.searchParams.get('date') || cairoDate();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpError(400, 'bad_date');
   const [e, a, an] = await Promise.all([
-    db().from('queue_entries').select('queue_number,patient_name,appt_time,status,source,called_count,called_at,in_room_at,done_at,priority')
+    db().from('queue_entries').select('queue_number,patient_name,patient_code,procedure,appt_time,status,source,called_count,called_at,in_room_at,done_at,priority')
       .eq('clinic_id', clinic).eq('service_date', date).order('queue_number', { nullsFirst: false }),
     db().from('audit_log').select('id,action,actor,entry_id,args,undone,created_at,result')
       .eq('clinic_id', clinic).eq('service_date', date).order('id', { ascending: false }).limit(300),

@@ -45,11 +45,11 @@ export default function Summary({ clinic }: { clinic: string }) {
         </section>
         <table className="w-full border-collapse text-[12px]">
           <thead><tr className="bg-slate-100 text-start">
-            {['الرقم', 'الموعد', 'الاسم', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
+            {['الرقم', 'الموعد', 'الاسم', 'النوع', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
           </tr></thead>
           <tbody>{withBreaks(sortByEntry(d.entries)).map((row: any, i: number) => row.brk ? (
             <tr key={'b' + i} className="break-inside-avoid bg-amber-50">
-              <td colSpan={8} className="border border-amber-200 px-2 py-1 text-center font-bold text-amber-800">
+              <td colSpan={9} className="border border-amber-200 px-2 py-1 text-center font-bold text-amber-800">
                 ☕ استراحة الطبيب – {minutesAr(row.brk.min, A)} <span className="num font-normal">({fmtTs12(row.brk.from)} ← {fmtTs12(row.brk.to)})</span>
               </td>
             </tr>) : ((e: any) => (
@@ -57,6 +57,9 @@ export default function Summary({ clinic }: { clinic: string }) {
               <td className="num border border-slate-200 px-2 py-1 font-bold">{e.queue_number ? A(e.queue_number) : '—'}{e.priority ? ' ⚑' : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTime12(e.appt_time)}</td>
               <td className="border border-slate-200 px-2 py-1">{e.patient_name}{e.source === 'walkin' ? ' (بدون حجز)' : ''}</td>
+              <td className="border border-slate-200 px-1 py-1 text-center">{e.procedure ? (
+                <span className={`inline-block rounded px-2 py-px text-[11px] font-black text-white ${/كشف/.test(e.procedure) ? 'bg-[#6b3e26]' : /استشار/.test(e.procedure) ? 'bg-sky-500' : 'bg-slate-500'}`}
+                  style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{e.procedure}</span>) : ''}</td>
               <td className="border border-slate-200 px-2 py-1">{STATUS_AR[e.status as Status]}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.called_at)}{e.called_count > 1 ? ` ×${A(e.called_count)}` : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.in_room_at)}</td>
@@ -98,14 +101,14 @@ function minutesAr(n: number, A: (v: any) => string): string {
   return `${A(n)} ${n <= 10 ? 'دقائق' : 'دقيقة'}`;
 }
 
-// a gap of more than 5 minutes between one patient leaving and the next entering = doctor's break
+// a gap of more than 10 minutes between one patient leaving and the next entering = doctor's break
 function withBreaks(list: any[]) {
   const out: any[] = [];
   let lastDone: string | null = null;
   for (const e of list) {
     if (e.in_room_at && lastDone) {
       const min = Math.round((+new Date(e.in_room_at) - +new Date(lastDone)) / 60000);
-      if (min > 5) out.push({ brk: { min, from: lastDone, to: e.in_room_at } });
+      if (min > 10) out.push({ brk: { min, from: lastDone, to: e.in_room_at } });
     }
     out.push({ e });
     if (e.done_at) lastDone = e.done_at;
