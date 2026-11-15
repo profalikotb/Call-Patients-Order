@@ -596,7 +596,8 @@ function Row({ clinic, reload, e, N, ar, lang, SL, isCurrent, busy, policy, open
         <div className="flex flex-wrap items-center gap-1.5">
           {e.patient_code && <CodeChip code={String(e.patient_code)} />}
           <span className="truncate font-bold text-ink-900">{e.patient_name || '—'}</span>
-          {isKashf(e.procedure) && <PayChip clinic={clinic} e={e} notify={notify} reload={reload} />}
+          {isKashf(e.procedure) ? <PayChip clinic={clinic} e={e} notify={notify} reload={reload} />
+            : /استشار/.test(e.procedure ?? '') && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-sm font-bold text-slate-500 ring-1 ring-slate-200" title="الاستشارة مجانية – لا تحتاج طريقة دفع">🆓 مجاني</span>}
           {e.priority && <span className="chip bg-rose-600 text-white">طارئ</span>}
           {e.source === 'walkin' && <span className="chip bg-teal-50 text-teal-700">بدون حجز</span>}
           {e.dup_hint && <span className="chip bg-amber-100 text-amber-800" title={`حجز آخر اليوم: ${e.dup_hint}`}>⚠ مكرر</span>}
