@@ -18,7 +18,7 @@ export default function Summary({ clinic }: { clinic: string }) {
   const A = toArabicDigits;
   const cards: [string, number | string][] = d ? [
     ['إجمالي', d.total], ['تم الكشف', d.by.done ?? 0], ['منتظر', d.by.waiting ?? 0], ['غائب', d.by.absent ?? 0],
-    ['مؤجل', d.by.postponed ?? 0], ['ملغي', d.by.cancelled ?? 0], ['بدون حجز', d.walkins], ['متوسط الكشف (د)', d.avg_consult ?? '—'],
+    ['مؤجل', d.by.postponed ?? 0], ['ملغي', d.by.cancelled ?? 0], ['بدون حجز', d.walkins], ['متوسط الكشف (دقيقة)', d.avg_consult ?? '—'],
   ] : [];
   return (
     <main className="mx-auto max-w-[210mm] bg-white p-6 print:p-0">
@@ -46,7 +46,7 @@ export default function Summary({ clinic }: { clinic: string }) {
           <thead><tr className="bg-slate-100 text-start">
             {['الرقم', 'الموعد', 'الاسم', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
           </tr></thead>
-          <tbody>{d.entries.map((e: any, i: number) => (
+          <tbody>{sortByEntry(d.entries).map((e: any, i: number) => (
             <tr key={i} className="break-inside-avoid">
               <td className="num border border-slate-200 px-2 py-1 font-bold">{e.queue_number ? A(e.queue_number) : '—'}{e.priority ? ' ⚑' : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTime12(e.appt_time)}</td>
@@ -55,7 +55,7 @@ export default function Summary({ clinic }: { clinic: string }) {
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.called_at)}{e.called_count > 1 ? ` ×${A(e.called_count)}` : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.in_room_at)}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.done_at)}</td>
-              <td className="num border border-slate-200 px-2 py-1">{e.done_at && e.in_room_at ? A(Math.round((+new Date(e.done_at) - +new Date(e.in_room_at)) / 60000)) + ' د' : ''}</td>
+              <td className="num border border-slate-200 px-2 py-1">{e.done_at && e.in_room_at ? minutesAr(Math.round((+new Date(e.done_at) - +new Date(e.in_room_at)) / 60000), A) : ''}</td>
             </tr>))}</tbody>
         </table>
         <h2 className="mb-2 mt-6 font-bold text-ink-900">سجل النداءات</h2>
@@ -76,4 +76,18 @@ export default function Summary({ clinic }: { clinic: string }) {
       </>)}
     </main>
   );
+}
+
+// order of entering the room (works across midnight – full timestamps); not entered yet → after, by call time / number
+function sortByEntry(list: any[]) {
+  const t = (x: any) => (x ? +new Date(x) : Infinity);
+  return [...list].sort((a, b) => t(a.in_room_at) - t(b.in_room_at) || t(a.called_at) - t(b.called_at) || (a.queue_number ?? 1e9) - (b.queue_number ?? 1e9));
+}
+
+// Arabic minutes: دقيقة / دقيقتان / ٣–١٠ دقائق / ١١+ دقيقة
+function minutesAr(n: number, A: (v: any) => string): string {
+  if (n < 1) return 'أقل من دقيقة';
+  if (n === 1) return 'دقيقة';
+  if (n === 2) return 'دقيقتان';
+  return `${A(n)} ${n <= 10 ? 'دقائق' : 'دقيقة'}`;
 }
