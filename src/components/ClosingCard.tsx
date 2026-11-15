@@ -34,7 +34,11 @@ export default function ClosingCard({ clinic, date, T }: { clinic: string; date:
   const save = async () => {
     setMsg('…');
     const j = await (await fetch('/api/closing', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, date, items: c }) })).json().catch(() => ({}));
-    if (j.ok) { setDirty(false); setSaved({ by: 'أنت', at: new Date().toISOString() }); setMsg('✓ تم حفظ التقفيل'); setTimeout(() => setMsg(''), 3000); }
+    if (j.ok) {
+      setDirty(false); setSaved({ by: 'أنت', at: new Date().toISOString() });
+      setMsg(j.sheet ? (j.sheet.ok ? '✓ تم حفظ التقفيل · ✓ Google Sheet' : `✓ تم حفظ التقفيل · ⚠ لم يُرسل إلى Google Sheet: ${j.sheet.error}`) : '✓ تم حفظ التقفيل');
+      setTimeout(() => setMsg(''), j.sheet && !j.sheet.ok ? 12000 : 3500);
+    }
     else setMsg(`تعذّر الحفظ: ${j.detail || j.error || ''}`);
   };
   const copy = () => { try { navigator.clipboard.writeText(r.report); setMsg('📋 تم نسخ التقرير'); setTimeout(() => setMsg(''), 2000); } catch {} };

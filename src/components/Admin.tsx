@@ -359,7 +359,13 @@ function FeesCard({ clinics }: { clinics: any[] }) {
             </div>
           </label>))}
       </div>
-      <div className="flex items-center gap-3"><button className="btn-primary" onClick={saveAll}>حفظ الأسعار</button>{note && <span className="font-bold text-emerald-700">{note}</span>}</div>
+      <div className="flex flex-wrap items-center gap-3"><button className="btn-primary" onClick={saveAll}>حفظ الأسعار</button>
+        <button className="btn-ghost text-sm" title="Google Sheet «DailyClinicAcount» – مرة واحدة بعد التركيب، أو لإصلاح أي يوم" onClick={async () => {
+          setNote('… جاري الإرسال');
+          const j = await (await fetch('/api/closing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) })).json().catch(() => ({}));
+          setNote(j.ok ? `✓ Google Sheet: ${j.n} يوم (${j.added} جديد، ${j.updated} تحديث)` : `⚠ ${j.detail || j.error}`);
+        }}>⇪ إرسال كل التقفيلات إلى Google Sheet</button>
+        {note && <span className="font-bold text-emerald-700">{note}</span>}</div>
     </div>
   );
 }
