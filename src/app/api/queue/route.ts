@@ -8,6 +8,8 @@ import { bookingsList } from '@/lib/server/bookings';
 import { listStaffMsgs } from '@/lib/server/staffMsg';
 export const runtime = 'nodejs';
 import { getFee } from '@/lib/server/fees';
+import { after } from 'next/server';
+import { checkSyncAlert } from '@/lib/server/alert';
 export const dynamic = 'force-dynamic';
 
 const ORDER: Record<string, number> = { in_room: 0, called: 1, waiting: 2, booked: 3, postponed: 4, absent: 5, done: 6, cancelled: 7 };
@@ -65,6 +67,10 @@ export const GET = handle(async (req) => {
       ((a.queue_number ?? 1e9) - (b.queue_number ?? 1e9)) || String(a.appt_time).localeCompare(String(b.appt_time)));
 
   const count = (s: string) => rows.filter((r) => r.status === s).length;
+  if (sheetSource() === 'push') {                      // background: phone alert if the clinic PC stopped sending
+    const active = rows.filter((r) => ['waiting', 'called', 'in_room'].includes(r.status)).length;
+    after(() => checkSyncAlert(today, c.name_ar, active).catch(() => {}));
+  }
   const d = display.data;
   return json({
     ok: true, today, clinic: c, role: me.role, fee: me.role === 'admin' ? await getFee(clinic, today) : null, policy: settings.policy, room_label: settings.room_label,

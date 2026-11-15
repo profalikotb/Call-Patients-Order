@@ -40,6 +40,8 @@ export default function Admin() {
           <select className="rounded-lg bg-white/10 px-2 py-1 text-sm" value={clinic} onChange={(e) => setClinic(e.target.value)}>
             {clinics.map((c) => <option key={c.id} value={c.id} className="text-ink-900">{c.name_ar}</option>)}
           </select>
+          <a href="/api/admin/backup" className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-500" title="نسخة كاملة لكل الأيام – احفظها على جهازك. (تُحفظ نسخة تلقائية يومياً 9 ص)">⬇ نسخة احتياطية</a>
+          <a href="/report" className="rounded-lg bg-gold-500 px-3 py-1 text-xs font-bold text-ink-950">📊 التقرير الشهري</a>
           <span className="ms-auto text-xs text-white/60">TTS: Azure {d.tts.azure ? '✓' : '✗'} · ElevenLabs {d.tts.elevenlabs ? '✓' : '✗'} · Sheet: {d.sheet_source}</span>
         </div>
         <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4">

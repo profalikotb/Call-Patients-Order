@@ -29,3 +29,13 @@ export async function setFee(clinic: string, fee: number, fromDate: string) {
   await write('fees', { ...cur, [clinic]: f });
 }
 export async function getFees(): Promise<Record<string, number>> { return (await read('fees')) as Record<string, number>; }
+
+/** load the fee history once → resolver (clinic, date) → fee of that day */
+export async function feeResolver(): Promise<(clinic: string, date: string) => number> {
+  const [cur, hist] = await Promise.all([read('fees'), read('fee_history') as Promise<Hist>]);
+  return (clinic, date) => {
+    const h = (hist[clinic] ?? []).filter((x) => x.from <= date).sort((a, b) => a.from.localeCompare(b.from));
+    if (h.length) return Number(h[h.length - 1].fee) || 0;
+    return hist[clinic]?.length ? 0 : Number(cur[clinic]) || 0;
+  };
+}

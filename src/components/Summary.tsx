@@ -15,6 +15,7 @@ export default function Summary({ clinic }: { clinic: string }) {
   const [name, setName] = useState('');
   const [admin, setAdmin] = useState(false);
   const [n, setN] = useState(0);                              // reload counter
+  useEffect(() => { const q = new URLSearchParams(location.search).get('date'); if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDate(q); }, []);   // link from the monthly report
   useEffect(() => {
     fetch(`/api/admin/summary?clinic=${clinic}&date=${date}`).then((r) => r.json()).then(setD);
     fetch('/api/clinics').then((r) => r.json()).then((j) => { setName(j.clinics?.find((c: any) => c.id === clinic)?.name_ar ?? clinic); setAdmin(j.session?.role === 'admin'); });
@@ -114,6 +115,20 @@ export default function Summary({ clinic }: { clinic: string }) {
               <td className="num border border-slate-200 px-2 py-1">{e.done_at && (e.called_at || e.in_room_at) ? minutesAr(Math.round((+new Date(e.done_at) - +new Date(e.called_at || e.in_room_at)) / 60000), A) : ''}</td>
             </tr>))(row.e))}</tbody>
         </table>
+        {d.role === 'admin' && (d.payment_log?.length ?? 0) > 0 && (<>
+          <h2 className="mb-2 mt-6 font-bold text-ink-900">سجل تغييرات الدفع</h2>
+          <table className="w-full border-collapse text-[12px]">
+            <thead><tr className="bg-slate-100">{['الوقت', 'المريض', 'من', 'إلى', 'بواسطة'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}</tr></thead>
+            <tbody>{d.payment_log.map((l: any) => (
+              <tr key={l.id} className={`break-inside-avoid ${l.to_method === 'refund' ? 'bg-rose-50' : ''}`}>
+                <td className="num border border-slate-200 px-2 py-1">{fmtTs12(l.created_at)}</td>
+                <td className="border border-slate-200 px-2 py-1">{l.patient_name}{l.patient_code ? <span className="num text-slate-500"> ({l.patient_code})</span> : null}</td>
+                <td className="border border-slate-200 px-2 py-1">{PAY[payOf(l.from_method)].ar}</td>
+                <td className="border border-slate-200 px-2 py-1 font-bold">{PAY[payOf(l.to_method)].ar}</td>
+                <td className="border border-slate-200 px-2 py-1">{l.actor}{l.actor_role === 'admin' ? ' (الطبيب)' : ''}</td>
+              </tr>))}</tbody>
+          </table>
+        </>)}
         <h2 className="mb-2 mt-6 font-bold text-ink-900">سجل النداءات</h2>
         <div className="columns-2 gap-4 text-[11px]">
           {d.announcements.map((a: any) => (

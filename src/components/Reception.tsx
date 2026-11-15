@@ -207,6 +207,7 @@ export default function Reception({ clinic }: { clinic: string }) {
 
   if (!data) return <div className="grid min-h-dvh place-items-center text-slate-500">{loadErr || '…'}</div>;
   const s = data.stats;
+  const isAdmin = data.role === 'admin';            // reception (assistant) gets a simpler screen
   const SL = ar ? STATUS_AR : STATUS_EN;
   const syncOk = sync?.ok ?? !data.day?.last_sync_error;
   const lastOk = data.day?.last_sync_ok_at;
@@ -337,12 +338,12 @@ export default function Reception({ clinic }: { clinic: string }) {
             } else if (j && !j.ok && j.error) flash(String(j.detail || j.error), 'err');
             setBusy(null);
           }} disabled={!!busy}>⟳ {t('refresh')}{thisPc && pcs ? <span className="text-xs text-slate-400">({pcs.sources.find((x) => x.name === thisPc)?.label ?? thisPc})</span> : null}</button>
-          <button className="btn-ghost" onClick={() => act(data.day?.paused ? 'resume' : 'pause')} disabled={!!busy}>{data.day?.paused ? `▶ ${t('resume')}` : `⏸ ${t('pause')}`}</button>
+          {(isAdmin || data.day?.paused) && <button className="btn-ghost" onClick={() => act(data.day?.paused ? 'resume' : 'pause')} disabled={!!busy}>{data.day?.paused ? `▶ ${t('resume')}` : `⏸ ${t('pause')}`}</button>}
           <button className="btn-ghost" disabled={!data.last_action || !!busy} title={data.last_action ? ACTION_AR[data.last_action.action] : ''}
             onClick={() => setDialog({ type: 'confirm', text: `التراجع عن آخر إجراء: «${ACTION_AR[data.last_action.action]}» (${data.last_action.actor ?? ''})؟`, run: () => act('undo') })}>
             ↶ {t('undo')}{data.last_action ? <span className="text-xs text-slate-400">({ACTION_AR[data.last_action.action]})</span> : null}</button>
           <button className="btn-ghost" onClick={() => setDialog({ type: 'walkin' })}>＋ {t('walkin')}</button>
-          <Link className="btn-ghost" href={`/summary/${clinic}`}>📋 {t('summary')}</Link>
+          {isAdmin && <Link className="btn-ghost" href={`/summary/${clinic}`}>📋 {t('summary')}</Link>}
           {data.role === 'admin' && <button className="btn-ghost text-rose-700 ring-rose-200" disabled={!!busy}
             title={ar ? 'حذف بيانات التجربة لهذا اليوم (للمدير فقط)' : 'clear test data (admin)'}
             onClick={async () => {
@@ -359,7 +360,7 @@ export default function Reception({ clinic }: { clinic: string }) {
             }}>🗑 {ar ? 'مسح بيانات اليوم' : 'Clear day'}</button>}
           {BOOKING_PAGES[clinic] && <button className="btn-ghost" onClick={() => openBookingPage(BOOKING_PAGES[clinic])}
             title={ar ? 'يفتح جدول الحجز في نافذة على يسار الشاشة' : 'opens the booking page on the left'}>📅 {ar ? 'جدول الحجز' : 'Bookings'}</button>}
-          <a className="btn-ghost" href={`/doctor/${clinic}`} target="pq_doctor" title={ar ? 'لوحة رسائل الطبيب للمساعد' : 'doctor → assistant'}>🩺 {ar ? 'رسائل الطبيب' : 'Doctor pad'}</a>
+          {isAdmin && <a className="btn-ghost" href={`/doctor/${clinic}`} target="pq_doctor" title={ar ? 'لوحة رسائل الطبيب للمساعد' : 'doctor → assistant'}>🩺 {ar ? 'رسائل الطبيب' : 'Doctor pad'}</a>}
           <button className="btn-ghost" onClick={() => setWa({ phone: '', name: '' })} title={ar ? 'انسخ الرقم من جدول الحجز والصقه هنا' : 'paste a number'}>💬 {ar ? 'واتساب' : 'WhatsApp'}</button>
           {tvKey && (
             <button onClick={openTv}
@@ -393,7 +394,7 @@ export default function Reception({ clinic }: { clinic: string }) {
                 {sd < todayIso && <span className="rounded-full bg-indigo-600 px-2 py-0.5 font-semibold text-white">{ar ? 'مستمرة بعد منتصف الليل' : 'continues past midnight'}</span>}
                 {other && <span className="font-semibold text-amber-800">{ar ? '– هذه الصفحة لعيادة أخرى' : '– this page is another clinic'}</span>}
               </>) : <span className="text-slate-500">{ar ? 'لا توجد جلسة مفتوحة – تبدأ تلقائياً مع أول قائمة' : 'No open session'}</span>}
-              <span className="ms-auto flex flex-wrap items-center gap-1.5">
+              {isAdmin && <span className="ms-auto flex flex-wrap items-center gap-1.5">
                 {newSess !== null ? (<>
                   <input type="date" className="rounded-lg border border-slate-300 px-2 py-1" value={newSess} max={todayIso}
                     onChange={(e) => setNewSess(e.target.value)} />
@@ -406,7 +407,7 @@ export default function Reception({ clinic }: { clinic: string }) {
                     onClick={() => setDialog({ type: 'confirm', text: `إنهاء جلسة ${sess.clinic_name ?? ''} (${fmtDate(sd, true)})؟ المرضى يُحفظون في الأرشيف ولا يُحذفون.`,
                       run: () => sessionAct({ action: 'end' }, 'تم إنهاء الجلسة') })}>■ {ar ? 'إنهاء الجلسة' : 'End session'}</button>}
                 </>)}
-              </span>
+              </span>}
             </section>);
         })()}
 
