@@ -19,6 +19,7 @@ export default function Summary({ clinic }: { clinic: string }) {
   const cards: [string, number | string][] = d ? [
     ['إجمالي', d.total], ['تم الكشف', d.by.done ?? 0], ['منتظر', d.by.waiting ?? 0], ['غائب', d.by.absent ?? 0],
     ['مؤجل', d.by.postponed ?? 0], ['ملغي', d.by.cancelled ?? 0], ['بدون حجز', d.walkins], ['متوسط الكشف (دقيقة)', d.avg_consult ?? '—'],
+    ['استراحات الطبيب', (() => { const b = withBreaks(sortByEntry(d.entries)).filter((r: any) => r.brk); return b.length ? `${b.length} – ${b.reduce((t: number, r: any) => t + r.brk.min, 0)} دقيقة` : '0'; })()],
   ] : [];
   return (
     <main className="mx-auto max-w-[210mm] bg-white p-6 print:p-0">
@@ -46,7 +47,12 @@ export default function Summary({ clinic }: { clinic: string }) {
           <thead><tr className="bg-slate-100 text-start">
             {['الرقم', 'الموعد', 'الاسم', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
           </tr></thead>
-          <tbody>{sortByEntry(d.entries).map((e: any, i: number) => (
+          <tbody>{withBreaks(sortByEntry(d.entries)).map((row: any, i: number) => row.brk ? (
+            <tr key={'b' + i} className="break-inside-avoid bg-amber-50">
+              <td colSpan={8} className="border border-amber-200 px-2 py-1 text-center font-bold text-amber-800">
+                ☕ استراحة الطبيب – {minutesAr(row.brk.min, A)} <span className="num font-normal">({fmtTs12(row.brk.from)} ← {fmtTs12(row.brk.to)})</span>
+              </td>
+            </tr>) : ((e: any) => (
             <tr key={i} className="break-inside-avoid">
               <td className="num border border-slate-200 px-2 py-1 font-bold">{e.queue_number ? A(e.queue_number) : '—'}{e.priority ? ' ⚑' : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTime12(e.appt_time)}</td>
@@ -56,7 +62,7 @@ export default function Summary({ clinic }: { clinic: string }) {
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.in_room_at)}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.done_at)}</td>
               <td className="num border border-slate-200 px-2 py-1">{e.done_at && e.in_room_at ? minutesAr(Math.round((+new Date(e.done_at) - +new Date(e.in_room_at)) / 60000), A) : ''}</td>
-            </tr>))}</tbody>
+            </tr>))(row.e))}</tbody>
         </table>
         <h2 className="mb-2 mt-6 font-bold text-ink-900">سجل النداءات</h2>
         <div className="columns-2 gap-4 text-[11px]">
@@ -90,4 +96,19 @@ function minutesAr(n: number, A: (v: any) => string): string {
   if (n === 1) return 'دقيقة';
   if (n === 2) return 'دقيقتان';
   return `${A(n)} ${n <= 10 ? 'دقائق' : 'دقيقة'}`;
+}
+
+// a gap of more than 5 minutes between one patient leaving and the next entering = doctor's break
+function withBreaks(list: any[]) {
+  const out: any[] = [];
+  let lastDone: string | null = null;
+  for (const e of list) {
+    if (e.in_room_at && lastDone) {
+      const min = Math.round((+new Date(e.in_room_at) - +new Date(lastDone)) / 60000);
+      if (min > 5) out.push({ brk: { min, from: lastDone, to: e.in_room_at } });
+    }
+    out.push({ e });
+    if (e.done_at) lastDone = e.done_at;
+  }
+  return out;
 }
