@@ -2,8 +2,8 @@
 export type PayMethod = 'fawry' | 'instapay' | 'refund';
 export const PAY_DEFAULT: PayMethod = 'fawry';
 export const PAY: Record<PayMethod, { ar: string; icon: string; cls: string }> = {
-  fawry:    { ar: 'فوري',         icon: '⚡', cls: 'bg-amber-400 text-black' },
-  instapay: { ar: 'انستاباي',     icon: '📱', cls: 'bg-violet-700 text-white' },
+  fawry:    { ar: 'فوري',         icon: '⚡', cls: 'bg-[#FFD200] text-[#0B2A6F] ring-1 ring-[#0B2A6F]/40' },
+  instapay: { ar: 'انستاباي',     icon: '📱', cls: 'bg-gradient-to-l from-[#4B1E78] to-[#8A3FC8] text-white' },
   refund:   { ar: 'تم رد الكشف', icon: '↩', cls: 'bg-rose-600 text-white' },
 };
 export const PAY_ORDER: PayMethod[] = ['fawry', 'instapay', 'refund'];

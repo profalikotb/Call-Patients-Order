@@ -11,3 +11,7 @@ export async function setFee(clinic: string, fee: number) {
   const { error } = await d.from('app_config').upsert({ key: 'fees', value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
   if (error) throw error;
 }
+export async function getFees(): Promise<Record<string, number>> {
+  const { data } = await db().from('app_config').select('value').eq('key', 'fees').maybeSingle();
+  return ((data?.value as any) ?? {}) as Record<string, number>;
+}

@@ -61,7 +61,7 @@ export default function Admin() {
 function ClinicTab({ s, setS, clinics, setClinics, clinic, save }: any) {
   const c = clinics.find((x: any) => x.id === clinic);
   const setC = (k: string, v: any) => setClinics(clinics.map((x: any) => (x.id === clinic ? { ...x, [k]: v } : x)));
-  return (
+  return (<>
     <div className="card space-y-5 p-5">
       <div>
         <div className="label">سياسة ترتيب الدور</div>
@@ -93,7 +93,8 @@ function ClinicTab({ s, setS, clinics, setClinics, clinic, save }: any) {
       </div>}
       <button className="btn-primary" onClick={() => save({ settings: s, clinics: [c] })}>حفظ</button>
     </div>
-  );
+    <FeesCard clinics={clinics} />
+  </>);
 }
 
 function VoiceTab({ s, setS, setV, save, clinic, tts }: any) {
@@ -324,6 +325,38 @@ function LinksTab({ clinics, k }: any) {
           </div>);
       })}
       <p className="p-4 text-xs text-slate-500">رابط الشاشة يحتوي مفتاح العرض – لا يُنشر للعامة. يعرض الأرقام فقط بدون أي بيانات للمرضى. لتغيير المفتاح غيّر DISPLAY_KEY في Vercel ثم أعد النشر.</p>
+    </div>
+  );
+}
+
+// كشف price per clinic (استشارة is free) – used for the day money totals
+function FeesCard({ clinics }: { clinics: any[] }) {
+  const [f, setF] = useState<Record<string, string>>({});
+  const [note, setNote] = useState('');
+  useEffect(() => { fetch('/api/fee', { cache: 'no-store' }).then((r) => r.json()).then((j) => j.ok && setF(Object.fromEntries(Object.entries(j.fees).map(([k, v]) => [k, String(v)])))).catch(() => {}); }, []);
+  const saveAll = async () => {
+    for (const c of clinics) {
+      if (f[c.id] === undefined || f[c.id] === '') continue;
+      const j = await (await fetch('/api/fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic: c.id, fee: f[c.id] }) })).json().catch(() => ({}));
+      if (!j.ok) { setNote(`خطأ في سعر ${c.name_ar}`); return; }
+    }
+    setNote('✓ تم حفظ الأسعار'); setTimeout(() => setNote(''), 3000);
+  };
+  return (
+    <div className="card mt-4 space-y-3 border-2 border-emerald-600 p-5">
+      <div className="font-display text-lg font-extrabold text-emerald-800">💰 سعر الكشف لكل عيادة <span className="text-sm font-semibold text-slate-500">(الاستشارة مجانية)</span></div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {clinics.map((c) => (
+          <label key={c.id} className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">
+            <div className="mb-1 font-bold text-ink-900">{c.name_ar}</div>
+            <div className="flex items-center gap-2">
+              <input className="input num text-lg font-black" inputMode="numeric" dir="ltr" placeholder="0" value={f[c.id] ?? ''}
+                onChange={(e) => setF({ ...f, [c.id]: e.target.value.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[^\d]/g, '') })} />
+              <span className="font-bold text-slate-600">ج.م</span>
+            </div>
+          </label>))}
+      </div>
+      <div className="flex items-center gap-3"><button className="btn-primary" onClick={saveAll}>حفظ الأسعار</button>{note && <span className="font-bold text-emerald-700">{note}</span>}</div>
     </div>
   );
 }

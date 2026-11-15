@@ -502,7 +502,7 @@ export default function Reception({ clinic }: { clinic: string }) {
                 const T = payTotals(entries, data.fee ?? 0);
                 return <button className="rounded-md bg-emerald-800 px-2.5 py-1.5 text-xs font-black text-white" title={T.fee ? `⚡ فوري ${T.fawry} = ${egp(T.fawrySum)}\n📱 انستاباي ${T.instapay} = ${egp(T.instapaySum)}\n↩ رد ${T.refund} = ${egp(T.refundSum)}\nسعر الكشف ${egp(T.fee)} – اضغط للتغيير` : 'اضغط لتحديد سعر الكشف'}
                   onClick={async () => {
-                    const v = prompt('سعر الكشف (جنيه):', String(data.fee || ''));
+                    const v = prompt(`سعر الكشف في ${data.clinic?.name_ar ?? ''} (جنيه):\n(لكل عيادة سعرها – أسعار كل العيادات من صفحة الإعدادات)`, String(data.fee || ''));
                     if (v === null) return;
                     const j = await (await fetch('/api/fee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, fee: toWesternDigits(v) }) })).json().catch(() => ({}));
                     if (j.ok) { flash(`سعر الكشف: ${egp(j.fee)}`); load(); } else flash('سعر غير صحيح', 'err');
@@ -988,8 +988,9 @@ function PayChip({ clinic, e, notify, reload }: { clinic: string; e: any; notify
   return (
     <span className="relative inline-flex">
       <button onClick={() => setOpen(!open)} title="طريقة الدفع – اضغط للتغيير"
-        className={`chip px-2 font-bold ${p.cls} ${m === 'fawry' ? 'opacity-80' : 'shadow ring-2 ring-offset-1 ' + (m === 'refund' ? 'ring-rose-300' : 'ring-violet-300')}`}>
-        {p.icon} {p.ar} <span className="opacity-60">▾</span></button>
+        className={`inline-flex items-center gap-1.5 rounded-full py-1 pe-2.5 ps-1 text-sm font-black leading-none shadow-sm transition hover:scale-105 hover:shadow ${p.cls}`}>
+        <span className={`grid h-6 w-6 place-items-center rounded-full text-xs ${m === 'fawry' ? 'bg-[#0B2A6F] text-[#FFD200]' : 'bg-white/25'}`}>{p.icon}</span>
+        {p.ar}<span className="text-[10px] opacity-60">▼</span></button>
       {open && (<>
         <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
         <div className="absolute start-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-xl bg-white py-1 shadow-xl ring-1 ring-slate-200">
