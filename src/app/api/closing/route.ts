@@ -42,7 +42,11 @@ export const PUT = handle(async (req) => {
   ]);
   const pm = new Map((pays as any[]).map((p) => [p.entry_id, p.method]));
   const T = payTotals((ents.data ?? []).map((e: any) => ({ ...e, payment: pm.get(e.id) ?? 'fawry' })), fee);
-  items.no_cases = T.fawry + T.instapay + T.refund; items.fees_back = T.refund; items.fees = T.fee;
+  // a field edited by hand keeps the typed value; otherwise the live value is used
+  const manual: Record<string, boolean> = {};
+  const liveV: Record<string, number> = { no_cases: T.fawry + T.instapay + T.refund, fees_back: T.refund, fees: T.fee };
+  for (const k of ['no_cases', 'fees_back', 'fees']) { if (src.manual?.[k]) manual[k] = true; else items[k] = liveV[k]; }
+  (items as any).manual = manual;
   const c = calcClosing(items as any, dd(date));
   const { error } = await db().from('day_closing').upsert({ clinic_id: clinic, service_date: date, items, grand_net: c.grand_net, report: c.report,
     updated_by: me.name || me.sub, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id,service_date' });
