@@ -4,13 +4,15 @@
  * Storage for the daily clinic closing (تقفيل العيادة): ONE row per clinic per day.
  * Saving the closing on the website writes/updates its row here automatically.
  *
- * Install (inside THIS spreadsheet):
- * 1) Extensions → Apps Script → paste this file → Save.
+ * Install in a NEW, separate Apps Script project (script.google.com → New project),
+ * so the scripts already inside AppSheetClinic stay untouched:
+ * 1) Paste this file → Save.
  * 2) Run  setupAccount  once (allow access) → the log (View → Logs / Execution log) shows the TOKEN.
  * 3) Deploy → New deployment → ⚙ Web app → Execute as: Me · Who has access: Anyone → Deploy → copy the /exec URL.
  * 4) Vercel → Environment Variables:  ACCOUNT_SHEET_URL = the /exec URL,  ACCOUNT_SHEET_TOKEN = the token → Redeploy.
  * 5) Website → الإعدادات → «⇪ إرسال كل التقفيلات إلى Google Sheet» once (copies the days already saved).
  */
+const ACC_SHEET_ID = '10hfoSsr9y8OBx8gpe_s9De9eijgMNAGLrzWFNVqd4oo';   // AppSheetClinic
 const ACC_TAB = 'DailyClinicAcount';
 const ACC_HEAD = ['Date of Work', 'Clinic', 'No of Cases', 'Fees Back', 'Net Number', 'Fees', 'NetFees',
   'Mohamed Day', 'Mohamed Salary', 'Mohamed Clean', 'Naser Clean', 'Bawab and Mentainace', 'Parking',
@@ -26,7 +28,7 @@ function setupAccount() {
 }
 
 function accSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById(ACC_SHEET_ID);
   const sh = ss.getSheetByName(ACC_TAB) || ss.insertSheet(ACC_TAB);
   const first = sh.getRange(1, 1, 1, ACC_HEAD.length).getValues()[0];
   if (first.join('|') !== ACC_HEAD.join('|')) {
