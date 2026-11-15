@@ -344,6 +344,7 @@ export default function Reception({ clinic }: { clinic: string }) {
             ↶ {t('undo')}{data.last_action ? <span className="text-xs text-slate-400">({ACTION_AR[data.last_action.action]})</span> : null}</button>
           <button className="btn-ghost" onClick={() => setDialog({ type: 'walkin' })}>＋ {t('walkin')}</button>
           {isAdmin && <Link className="btn-ghost" href={`/summary/${clinic}`}>📋 {t('summary')}</Link>}
+          {isAdmin && <Link className="btn-ghost font-bold text-amber-700" href="/report" title="التحصيل والمصروفات والصافي لكل شهر">📊 {ar ? 'التقرير الشهري' : 'Monthly'}</Link>}
           {data.role === 'admin' && <button className="btn-ghost text-rose-700 ring-rose-200" disabled={!!busy}
             title={ar ? 'حذف بيانات التجربة لهذا اليوم (للمدير فقط)' : 'clear test data (admin)'}
             onClick={async () => {

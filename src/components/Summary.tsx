@@ -47,6 +47,7 @@ export default function Summary({ clinic }: { clinic: string }) {
       <div className="no-print mb-4 flex items-center gap-2">
         <Link href={`/reception/${clinic}`} className="btn-ghost text-sm">→ الاستقبال</Link>
         <input type="date" className="input w-auto" value={date} onChange={(e) => setDate(e.target.value)} />
+        {admin && <Link href="/report" className="btn-ghost text-sm font-bold text-amber-700">📊 التقرير الشهري</Link>}
         {admin && <button className="btn-ghost ms-auto text-sm text-rose-700" onClick={clearDay} title="مسح بيانات التجربة لهذا اليوم">🗑 مسح بيانات اليوم</button>}
         <button className={`btn-primary text-sm ${admin ? '' : 'ms-auto'}`} onClick={() => print()}>🖨 طباعة A4</button>
       </div>
