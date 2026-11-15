@@ -3,6 +3,8 @@ import { handle, json, requireStaff, clinicParam, HttpError } from '@/lib/server
 import { db } from '@/lib/server/db';
 import { calcClosing, EXPENSES, closingNum } from '@/lib/closing';
 import { accountSheetOn, exportClosings } from '@/lib/server/accountSheet';
+import { getFee } from '@/lib/server/fees';
+import { payTotals } from '@/lib/payment';
 export const maxDuration = 60;
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,6 +34,15 @@ export const PUT = handle(async (req) => {
     notes_other: String(src.notes_other ?? '').slice(0, 500), notes: String(src.notes ?? '').slice(0, 1000),
   };
   for (const [k] of EXPENSES) items[k] = closingNum(src[k]);
+  // cases / refunds / fee always come from the live data (payments + fee of that day), not from the browser
+  const [ents, pays, fee] = await Promise.all([
+    db().from('queue_entries').select('id,procedure,status').eq('clinic_id', clinic).eq('service_date', date),
+    db().from('entry_payments').select('entry_id,method').eq('clinic_id', clinic).eq('service_date', date).then((r) => r.data ?? [], () => []),
+    getFee(clinic, date),
+  ]);
+  const pm = new Map((pays as any[]).map((p) => [p.entry_id, p.method]));
+  const T = payTotals((ents.data ?? []).map((e: any) => ({ ...e, payment: pm.get(e.id) ?? 'fawry' })), fee);
+  items.no_cases = T.fawry + T.instapay + T.refund; items.fees_back = T.refund; items.fees = T.fee;
   const c = calcClosing(items as any, dd(date));
   const { error } = await db().from('day_closing').upsert({ clinic_id: clinic, service_date: date, items, grand_net: c.grand_net, report: c.report,
     updated_by: me.name || me.sub, updated_at: new Date().toISOString() }, { onConflict: 'clinic_id,service_date' });

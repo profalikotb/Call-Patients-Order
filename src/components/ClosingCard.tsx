@@ -13,29 +13,32 @@ export default function ClosingCard({ clinic, date, T }: { clinic: string; date:
   const [c, setC] = useState<Record<string, any>>({});
   const [saved, setSaved] = useState<{ by?: string; at?: string } | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [savedAuto, setSavedAuto] = useState<any>(null);       // the 3 system numbers as last saved
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
     let off = false;
-    setC({}); setSaved(null); setDirty(false); setMsg('');
+    setC({}); setSaved(null); setDirty(false); setMsg(''); setSavedAuto(null);
     fetch(`/api/closing?clinic=${clinic}&date=${date}`, { cache: 'no-store' }).then((r) => r.json()).then((j) => {
       if (off) return;
       if (!j.ok) { setMsg(String(j.detail || j.error)); setC({ ...auto }); return; }
-      if (j.closing) { setC(j.closing.items); setSaved({ by: j.closing.updated_by, at: j.closing.updated_at }); }
+      if (j.closing) { setSavedAuto(j.closing.items); setC({ ...j.closing.items, ...auto }); setSaved({ by: j.closing.updated_by, at: j.closing.updated_at }); }
       else setC({ ...auto });
     }).catch(() => setC({ ...auto }));
     return () => { off = true; };
   }, [clinic, date]); // eslint-disable-line
 
-  const r = calcClosing(c, dd(date));
+  // cases / refunds / fee ALWAYS follow the live data (الحساب box above) – never typed by hand
+  useEffect(() => { setC((p) => ({ ...p, ...auto })); }, [auto]);
+  const r = calcClosing({ ...c, ...auto }, dd(date));
   const set = (k: string, v: string) => { setC({ ...c, [k]: v }); setDirty(true); };
-  const differs = saved && (closingNum(c.no_cases) !== auto.no_cases || closingNum(c.fees_back) !== auto.fees_back || closingNum(c.fees) !== auto.fees);
+  const differs = !!savedAuto && (closingNum(savedAuto.no_cases) !== auto.no_cases || closingNum(savedAuto.fees_back) !== auto.fees_back || closingNum(savedAuto.fees) !== auto.fees);
 
   const save = async () => {
     setMsg('…');
-    const j = await (await fetch('/api/closing', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, date, items: c }) })).json().catch(() => ({}));
+    const j = await (await fetch('/api/closing', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, date, items: { ...c, ...auto } }) })).json().catch(() => ({}));
     if (j.ok) {
-      setDirty(false); setSaved({ by: 'أنت', at: new Date().toISOString() });
+      setDirty(false); setSavedAuto({ ...auto }); setSaved({ by: 'أنت', at: new Date().toISOString() });
       setMsg(j.sheet ? (j.sheet.ok ? '✓ تم حفظ التقفيل · ✓ Google Sheet' : `✓ تم حفظ التقفيل · ⚠ لم يُرسل إلى Google Sheet: ${j.sheet.error}`) : '✓ تم حفظ التقفيل');
       setTimeout(() => setMsg(''), j.sheet && !j.sheet.ok ? 12000 : 3500);
     }
@@ -44,8 +47,8 @@ export default function ClosingCard({ clinic, date, T }: { clinic: string; date:
   const copy = () => { try { navigator.clipboard.writeText(r.report); setMsg('📋 تم نسخ التقرير'); setTimeout(() => setMsg(''), 2000); } catch {} };
 
   const Num = (k: string, big?: boolean, ro?: boolean) => (
-    <input className={`num w-full rounded-md border px-2 py-1 text-end font-bold outline-none focus:ring-2 focus:ring-emerald-400 print:border-0 ${big ? 'border-amber-300 bg-yellow-200 text-base' : 'border-slate-300 bg-white'} ${ro ? 'bg-slate-100 text-slate-500' : ''}`}
-      inputMode="numeric" dir="ltr" readOnly={ro} value={c[k] ?? ''} placeholder="0" onChange={(e) => set(k, e.target.value)} onFocus={(e) => e.target.select()} />
+    <input className={`num w-full rounded-md border px-2 py-1 text-end font-bold outline-none focus:ring-2 focus:ring-emerald-400 print:border-0 ${big ? 'border-amber-300 bg-yellow-200 text-base' : 'border-slate-300 bg-white'} ${ro ? (big ? 'cursor-default' : 'cursor-default bg-slate-100') : ''}`}
+      inputMode="numeric" dir="ltr" readOnly={ro} value={(auto as any)[k] ?? c[k] ?? ''} placeholder="0" onChange={(e) => set(k, e.target.value)} onFocus={(e) => e.target.select()} />
   );
   const Row = (label: string, hint: string, children: any, key?: string) => (
     <label key={key} className="grid grid-cols-[1fr_7.5rem] items-center gap-2 py-0.5"><span className="text-[13px] font-semibold text-ink-900">{label}{hint && <span className="ms-1 text-[10px] font-normal text-slate-400">{hint}</span>}</span>{children}</label>
@@ -57,17 +60,17 @@ export default function ClosingCard({ clinic, date, T }: { clinic: string; date:
         <b>🧾 تقفيل العيادة</b>
         <span className="text-xs text-white/60">{saved ? `محفوظ${saved.by ? ' – ' + saved.by : ''}` : 'لم يُحفظ بعد'}{dirty ? ' · تعديلات غير محفوظة' : ''}</span>
         <span className="ms-auto flex gap-1.5 print:hidden">
-          {differs && <button onClick={() => { setC({ ...c, ...auto }); setDirty(true); }} className="rounded bg-amber-400 px-2 py-0.5 text-xs font-bold text-black" title="أرقام النظام تغيرت بعد الحفظ">↻ تحديث من النظام</button>}
+          {differs && <span className="rounded bg-amber-400 px-2 py-0.5 text-xs font-bold text-black" title="أرقام الحساب تغيرت بعد آخر حفظ">⚠ احفظ لتحديث الأرقام</span>}
           <button onClick={save} className={`rounded px-3 py-0.5 text-xs font-black ${dirty || !saved ? 'bg-emerald-500 text-white' : 'bg-white/15'}`}>💾 حفظ التقفيل</button>
         </span>
       </div>
       <div className="grid gap-x-6 gap-y-1 p-3 sm:grid-cols-2">
         <div>
           <div className="mb-1 text-xs font-black text-emerald-800">الإيراد (الكشف فقط)</div>
-          {Row('عدد الحالات', 'No of Cases', Num('no_cases', true))}
-          {Row('كشف مُرتجع', 'Fees Back', Num('fees_back', true))}
+          {Row('عدد الحالات', 'تلقائي', Num('no_cases', true, true))}
+          {Row('كشف مُرتجع', 'تلقائي', Num('fees_back', true, true))}
           {Row('صافي العدد', 'Net Number', <><div className="num rounded-md bg-slate-100 px-2 py-1 text-end font-bold">{r.net_number}</div></>)}
-          {Row('سعر الكشف', 'Fees', Num('fees'))}
+          {Row('سعر الكشف', 'تلقائي', Num('fees', false, true))}
           {Row('صافي الكشوفات', 'NetFees', <><div className="num rounded-md bg-emerald-50 px-2 py-1 text-end font-black text-emerald-800">{egp(r.net_fees)}</div></>)}
         </div>
         <div>
