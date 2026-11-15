@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { PAY, payOf, isKashf, payTotals, egp } from '@/lib/payment';
+import { PAY, PAY_ORDER, payOf, isKashf, payTotals, egp } from '@/lib/payment';
 import ClosingCard from './ClosingCard';
 import Link from 'next/link';
 import { STATUS_AR, type Status } from '@/lib/config';
@@ -27,6 +27,14 @@ export default function Summary({ clinic }: { clinic: string }) {
     const j = await r.json().catch(() => ({}));
     alert(j.ok ? 'تم المسح ✓' : `تعذّر المسح: ${j.detail || j.error || r.status}`);
     setN((x) => x + 1);
+  };
+  // admin: change the payment of any day (e.g. a past Toukh day) – instant, logged, closing numbers follow
+  const setPay = async (e: any, m: string) => {
+    const prev = e.payment;
+    setD((x: any) => ({ ...x, entries: x.entries.map((r: any) => (r.id === e.id ? { ...r, payment: m } : r)) }));
+    const j = await (await fetch('/api/payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, entry_id: e.id, method: m }) })).json().catch(() => ({}));
+    if (!j.ok) { alert(`تعذّر الحفظ: ${j.detail || j.error || ''}`); setD((x: any) => ({ ...x, entries: x.entries.map((r: any) => (r.id === e.id ? { ...r, payment: prev } : r)) })); }
+    else setN((x) => x + 1);                                   // reload → payment log + totals
   };
   const A = toArabicDigits;
   const cards: [string, number | string][] = d ? [
@@ -106,8 +114,13 @@ export default function Summary({ clinic }: { clinic: string }) {
               <td className="border border-slate-200 px-1 py-1 text-center">{e.procedure ? (
                 <span className={`inline-block rounded px-2 py-px text-[11px] font-black text-white ${/كشف/.test(e.procedure) ? 'bg-[#6b3e26]' : /استشار/.test(e.procedure) ? 'bg-sky-500' : 'bg-slate-500'}`}
                   style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{e.procedure}</span>) : ''}</td>
-              <td className="border border-slate-200 px-1 py-1 text-center">{isKashf(e.procedure) ? <span className={`inline-block whitespace-nowrap rounded px-1.5 py-px text-[11px] font-black ${PAY[payOf(e.payment)].cls}`}
-                style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{PAY[payOf(e.payment)].ar}</span> : <span className="text-[11px] text-slate-400">مجاني</span>}</td>
+              <td className="border border-slate-200 px-1 py-1 text-center">{isKashf(e.procedure) ? (<>
+                {d.role === 'admin' && <select value={payOf(e.payment)} onChange={(ev) => setPay(e, ev.target.value)} title="تعديل طريقة الدفع لهذا اليوم"
+                  className={`cursor-pointer appearance-none rounded px-1.5 py-px text-center text-[11px] font-black outline-none print:hidden ${PAY[payOf(e.payment)].cls}`}>
+                  {PAY_ORDER.map((m) => <option key={m} value={m} className="bg-white text-ink-900">{PAY[m].ar}</option>)}
+                </select>}
+                <span className={`${d.role === 'admin' ? 'hidden print:inline-block' : 'inline-block'} whitespace-nowrap rounded px-1.5 py-px text-[11px] font-black ${PAY[payOf(e.payment)].cls}`}
+                  style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as any}>{PAY[payOf(e.payment)].ar}</span></>) : <span className="text-[11px] text-slate-400">مجاني</span>}</td>
               <td className="border border-slate-200 px-2 py-1">{STATUS_AR[e.status as Status]}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.called_at)}{e.called_count > 1 ? ` ×${A(e.called_count)}` : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.in_room_at)}</td>
