@@ -45,7 +45,7 @@ export default function Summary({ clinic }: { clinic: string }) {
         </section>
         <table className="w-full border-collapse text-[12px]">
           <thead><tr className="bg-slate-100 text-start">
-            {['الرقم', 'الموعد', 'الاسم', 'النوع', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
+            {['الرقم', 'الموعد', 'الاسم', 'النوع', 'الحالة', 'النداء', 'الدخول', 'الانتهاء', 'المدة (من النداء)'].map((h) => <th key={h} className="border border-slate-200 px-2 py-1 text-start">{h}</th>)}
           </tr></thead>
           <tbody>{withBreaks(sortByEntry(d.entries)).map((row: any, i: number) => row.brk ? (
             <tr key={'b' + i} className="break-inside-avoid bg-amber-50">
@@ -64,7 +64,7 @@ export default function Summary({ clinic }: { clinic: string }) {
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.called_at)}{e.called_count > 1 ? ` ×${A(e.called_count)}` : ''}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.in_room_at)}</td>
               <td className="num border border-slate-200 px-2 py-1">{fmtTs12(e.done_at)}</td>
-              <td className="num border border-slate-200 px-2 py-1">{e.done_at && e.in_room_at ? minutesAr(Math.round((+new Date(e.done_at) - +new Date(e.in_room_at)) / 60000), A) : ''}</td>
+              <td className="num border border-slate-200 px-2 py-1">{e.done_at && (e.called_at || e.in_room_at) ? minutesAr(Math.round((+new Date(e.done_at) - +new Date(e.called_at || e.in_room_at)) / 60000), A) : ''}</td>
             </tr>))(row.e))}</tbody>
         </table>
         <h2 className="mb-2 mt-6 font-bold text-ink-900">سجل النداءات</h2>

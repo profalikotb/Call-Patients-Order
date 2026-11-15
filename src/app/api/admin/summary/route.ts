@@ -21,7 +21,8 @@ export const GET = handle(async (req) => {
   const rows = e.data ?? [];
   const by: Record<string, number> = {};
   rows.forEach((r) => { by[r.status] = (by[r.status] ?? 0) + 1; });
-  const durs = rows.filter((r) => r.done_at && r.in_room_at).map((r) => (+new Date(r.done_at) - +new Date(r.in_room_at)) / 60000);
+  // consultation time = from «نداء» to the patient leaving the Oracle list (done)
+  const durs = rows.filter((r) => r.done_at && (r.called_at || r.in_room_at)).map((r) => (+new Date(r.done_at) - +new Date(r.called_at || r.in_room_at)) / 60000);
   const waits = rows.filter((r) => r.called_at && r.appt_time).length;
   return json({ ok: true, date, by, total: rows.length, walkins: rows.filter((r) => r.source === 'walkin').length,
     avg_consult: durs.length ? Math.round((durs.reduce((x, y) => x + y, 0) / durs.length) * 10) / 10 : null, waits,

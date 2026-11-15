@@ -496,6 +496,7 @@ export default function Reception({ clinic }: { clinic: string }) {
                 confirm={(text: string, run: () => void) => setDialog({ type: 'confirm', text, run })}
                 linkBooking={() => setLinkFor(e)} hasFeed={(data.bookings?.length ?? 0) > 0}
                 whatsApp={(phone: string) => setWa({ phone, name: e.patient_name ?? '' })}
+                notify={flash}
                 unlinkBooking={async () => { await fetch('/api/booking-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clinic, entry_id: e.id, unlink: true }) }); load(); }} />
             ))}
           </div>
@@ -519,7 +520,7 @@ export default function Reception({ clinic }: { clinic: string }) {
   );
 }
 
-function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking, hasFeed, whatsApp }: any) {
+function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, askNumber, confirm, linkBooking, unlinkBooking, hasFeed, whatsApp, notify }: any) {
   const st = e.status as Status;
   const primary: [string, string, any?][] = [];
   if (st === 'booked') primary.push(['checkin', 'تسجيل وصول']);
@@ -548,6 +549,12 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
     if (a === '__link') return linkBooking();
     if (a === '__unlink') return confirm(`إلغاء ربط ${e.patient_name} بالحجز الإلكتروني؟`, unlinkBooking);
     if (a === 'cancel') return confirm(`إلغاء دور ${e.patient_name}؟`, () => act('cancel', e.id));
+    if (a === 'call') {
+      // «نداء»: copy the patient code (to paste in Oracle) – the consultation time starts now
+      const code = e.patient_code ? toWesternDigits(String(e.patient_code)) : '';
+      if (code) { try { navigator.clipboard.writeText(code); } catch {} }
+      notify?.(code ? `📋 تم نسخ الكود ${code} – ⏱ بدأ وقت الكشف` : '⏱ بدأ وقت الكشف');
+    }
     act(a, e.id, args ?? {});
   };
 
@@ -579,6 +586,8 @@ function Row({ e, N, ar, lang, SL, isCurrent, busy, policy, open, setOpen, act, 
           {e.wa_phone
             ? <button className="num font-semibold text-emerald-700 hover:underline" dir="ltr" onClick={() => whatsApp(e.wa_phone)} title={ar ? 'واتساب برسالة جاهزة (رقم الحجز الإلكتروني)' : 'WhatsApp'}>🟢 {e.wa_phone.replace(/^20/, '0')}</button>
             : e.phone && <button className="num text-sky-700 hover:underline" dir="ltr" onClick={() => whatsApp(e.phone)} title={ar ? 'واتساب برسالة جاهزة' : 'WhatsApp'}>{e.phone}</button>}
+          {['called', 'in_room'].includes(st) && e.called_at && (() => { const m = Math.max(0, Math.round((Date.now() - new Date(e.called_at).getTime()) / 60000));
+            return <span className="rounded-md bg-emerald-600 px-1.5 font-bold text-white">⏱ {m < 1 ? 'بدأ الآن' : `منذ ${N(m)} ${m === 1 ? 'دقيقة' : m === 2 ? 'دقيقتان' : m <= 10 ? 'دقائق' : 'دقيقة'}`}</span>; })()}
           {st === 'waiting' && (() => { const m = Math.max(0, Math.round((Date.now() - new Date(e.checked_in_at ?? e.created_at).getTime()) / 60000));
             return m > 0 ? <span className={m >= 60 ? 'font-semibold text-rose-600' : 'text-slate-500'}>⏱ {ar ? 'ينتظر' : 'waiting'} {N(m)} د</span> : null; })()}
           {e.est_wait_min !== null && <span className="text-violet-700">≈ {N(e.est_wait_min)} د ({ar ? 'تقديري' : 'est.'})</span>}
