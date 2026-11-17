@@ -1,6 +1,6 @@
 // Minimal, safe service worker: app shell offline fallback only.
 // Never caches /api/* – queue state must always come from the server.
-const CACHE = 'pq-shell-v1';
+const CACHE = 'pq-shell-v2';
 self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
