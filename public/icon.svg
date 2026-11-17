@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#16406f"/><stop offset="1" stop-color="#0a1626"/></linearGradient>
+    <linearGradient id="au" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7d77a"/><stop offset="1" stop-color="#c9932c"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="0" fill="url(#bg)"/>
+  <g fill="none" stroke="url(#au)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,-14)">
+    <!-- left hemisphere -->
+    <path d="M250 118 C214 96 168 104 152 140 C118 142 98 176 112 206 C88 224 92 266 120 280 C116 312 144 338 176 332 C188 358 226 364 250 346 Z"/>
+    <!-- right hemisphere -->
+    <path d="M262 118 C298 96 344 104 360 140 C394 142 414 176 400 206 C424 224 420 266 392 280 C396 312 368 338 336 332 C324 358 286 364 262 346 Z"/>
+    <!-- gyri -->
+    <path d="M152 140 C172 150 182 168 178 188"/><path d="M112 206 C140 206 160 222 162 244"/><path d="M120 280 C146 274 170 284 180 304"/><path d="M212 150 C226 176 220 200 204 214"/><path d="M216 252 C232 270 230 296 214 310"/>
+    <path d="M360 140 C340 150 330 168 334 188"/><path d="M400 206 C372 206 352 222 350 244"/><path d="M392 280 C366 274 342 284 332 304"/><path d="M300 150 C286 176 292 200 308 214"/><path d="M296 252 C280 270 282 296 298 310"/>
+  </g>
+  <!-- spinal cord -->
+  <path d="M256 334 L256 372" stroke="url(#au)" stroke-width="15" stroke-linecap="round"/>
+  <text x="256" y="452" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="74" letter-spacing="10" fill="url(#au)">AK</text>
+</svg>

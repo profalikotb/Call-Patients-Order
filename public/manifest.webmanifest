@@ -1,7 +1,7 @@
 {
-  "name": "الدور الذكي – أ.د. على قطب على",
-  "short_name": "الدور الذكي",
-  "description": "Prof. Ali Kotb – Smart Patient Queue System",
+  "name": "Ali Kotb Neurosurgery",
+  "short_name": "Ali Kotb Neurosurgery",
+  "description": "Prof. Ali Kotb Neurosurgery – Smart Patient Queue",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
